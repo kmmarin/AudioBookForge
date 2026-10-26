@@ -177,6 +177,7 @@ function createRow(book) {
   $(".update", row).addEventListener("click", (e) => updateInfo(book.id, e.currentTarget));
   $(".remove", row).addEventListener("click", () => removeBook(book.id));
   $(".meter", row).addEventListener("click", () => openDetails(book.id));
+  moreMenu($(".more", row), () => bookExports(S.books.get(book.id)));
   return row;
 }
 
@@ -455,6 +456,54 @@ async function removeBook(id) {
     fail(err);
     return false;
   }
+}
+
+// ------------------------------------------------------------------ exports
+// A small ⋯ menu for what's rarely wanted, out of the way until it's looked
+// for. items() lists what there is to export right now: [{label, href, title}].
+// The menu sits beside its button so it works inside a modal dialog too.
+function moreMenu(btn, items) {
+  const menu = el("div", { class: "more-menu", popover: "auto", role: "menu" });
+  btn.after(menu);
+  btn.setAttribute("aria-haspopup", "menu");
+  btn.setAttribute("aria-expanded", "false");
+  menu.addEventListener("toggle", (e) => btn.setAttribute("aria-expanded", String(e.newState === "open")));
+  let wasOpen = false;
+  btn.addEventListener("pointerdown", () => { wasOpen = menu.matches(":popover-open"); });
+  btn.addEventListener("click", () => {
+    if (wasOpen) { wasOpen = false; return; }  // pressing the button already closed it
+    const list = items();
+    menu.replaceChildren(el("p", { class: "more-title", textContent: "Export" }),
+      ...(list.length ? list.map((it) => el("a", { href: it.href, role: "menuitem", textContent: it.label, title: it.title || "" }))
+        : [el("p", { class: "more-none", textContent: "Nothing to export yet." })]));
+    menu.showPopover();
+    const r = btn.getBoundingClientRect();
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    menu.style.left = `${Math.max(8, Math.min(r.right - w, innerWidth - w - 8))}px`;
+    menu.style.top = `${r.bottom + 4 + h > innerHeight - 8 ? Math.max(8, r.top - h - 4) : r.bottom + 4}px`;
+    $("a", menu)?.focus();
+  });
+  menu.addEventListener("click", (e) => { if (e.target.closest("a")) menu.hidePopover(); });
+}
+
+const voiceExport = (v) => ({
+  label: `Voice: ${v.narrator} (ZIP)`, href: `/api/voices/${encodeURIComponent(v.id)}/export`,
+  title: "Its files, for another Audiobook Forge or the engine it was made for",
+});
+
+function bookExports(b) {
+  if (!b) return [];
+  const items = [];
+  if (b.output_name) {
+    items.push({ label: `Audio (${b.output_name.split(".").pop().toUpperCase()})`, href: `/api/books/${b.id}/file`,
+                 title: needsRebuild(b) ? "The file as it was last made" : b.output_name });
+  }
+  if (b.chapters.some((c) => c.include && c.words)) {
+    items.push({ label: "Text (TXT)", href: `/api/books/${b.id}/text`, title: "The chapters read aloud, as plain text" });
+  }
+  const v = b.kind !== "audio" && S.cfg.voices.find((x) => x.id === b.voice);
+  if (v && v.group === "Your voices") items.push(voiceExport(v));
+  return items;
 }
 
 function applyTheme(theme) {
@@ -877,9 +926,16 @@ async function openCompare(id) {
     const made = madeCopies(b).some((v) => v.voice === e.voice.id && (v.mood || null) === (e.mood?.id || null));
     const use = el("button", { type: "button", class: "quiet", textContent: made ? "Switch to it" : "Use this voice",
                                title: made ? "Already made in this voice: switches at once" : "" });
+    let acts = use;
+    if (e.voice.group === "Your voices") {  // a voice made here can be taken elsewhere
+      const more = $("#row-tpl").content.querySelector(".more").cloneNode(true);
+      more.setAttribute("aria-label", `Export ${e.voice.label}`);
+      acts = el("div", { class: "c-acts" }, use, more);
+      moreMenu(more, () => [voiceExport(e.voice)]);
+    }
     const li = el("li", {}, play,
       el("div", {}, el("p", { class: "v-name", textContent: e.voice.label + (e.mood ? `: ${e.mood.label}` : "") + (made ? " ✓" : "") }), meta),
-      use);
+      acts);
     li.classList.toggle("current", e.voice.id === b.voice && (!e.mood || e.mood.id === b.mood));
     play.addEventListener("click", () => playSample(play, url));
     use.addEventListener("click", () => useVoice(id, e));

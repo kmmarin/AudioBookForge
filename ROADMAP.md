@@ -32,6 +32,7 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 - Fast: chapters voiced in parallel units on CPU or NVIDIA GPU, cached, so an edit re-voices only what changed.
 - The Whisper narration check, and **Redo** for chapters it flags.
 - Every voice a book is made in is kept; switching between them takes seconds.
+- Exports, under a small **⋯**: a book's audio, its text, and a voice you made, as a zip.
 
 **Read along**
 - Word-by-word highlighting, in any browser.

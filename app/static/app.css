@@ -235,6 +235,45 @@ textarea { resize: vertical; line-height: 1.55; }
 .actions { display: flex; flex-direction: column; gap: 6px; width: 116px; }
 .actions a.quiet { color: inherit; text-decoration: none; text-align: center; }
 
+/* The ⋯ menu: exports, out of the way until looked for. */
+.more {
+  align-self: flex-end;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--mute);
+  opacity: 0.5;
+  flex: none;
+}
+.actions .more { flex: none; }
+.more:hover, .more:focus-visible, .more[aria-expanded="true"] { opacity: 1; background: var(--track); }
+.more svg { width: 14px; height: 14px; fill: currentColor; }
+.more-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  min-width: 200px;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  box-shadow: 0 14px 40px rgb(0 0 0 / 0.35);
+}
+.more-menu:popover-open { display: flex; flex-direction: column; }
+.more-title { margin: 4px 10px; font-size: 12px; color: var(--mute); }
+.more-none { margin: 6px 10px; font-size: 13px; color: var(--mute); }
+.more-menu a { padding: 8px 10px; border-radius: 8px; color: inherit; text-decoration: none; white-space: nowrap; }
+.more-menu a:hover, .more-menu a:focus-visible { background: var(--track); outline: none; }
+.c-acts { display: flex; align-items: center; gap: 6px; }
+.c-acts .more { align-self: center; }
+
 /* An audiobook added for Read along has its own narration: no voice, format or sample. */
 .kind-note { display: none; margin: 0; font-size: 13px; color: var(--mute); max-width: 40ch; }
 .kind-note strong { display: block; color: var(--ink); font-size: 14px; font-weight: 600; }
@@ -482,7 +521,8 @@ input[type="range"] { accent-color: var(--signal); width: 100%; }
   .voice-list li { grid-template-columns: auto minmax(0, 1fr); }
   .versions li { grid-template-columns: 1fr; }
   .v-actions > * { flex: 1; text-align: center; }
-  .voice-list li > button.quiet { grid-column: 1 / -1; }
+  .voice-list li > button.quiet, .voice-list li > .c-acts { grid-column: 1 / -1; }
+  .c-acts > button.quiet { flex: 1; }
   .d-top { grid-template-columns: 1fr; }
   .d-cover { flex-direction: row; align-items: end; flex-wrap: wrap; }
   .l-form { grid-template-columns: 1fr; }
