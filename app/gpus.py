@@ -136,6 +136,8 @@ def runs(server: dict, model: str) -> bool:
     m = next((m for m in h.get("models") or [] if m.get("id") == model), None)
     if m is None or not m.get("fits"):
         return False
+    if "ready" in m:  # the server knows each of its cards: one has it loaded, or room for it
+        return bool(m["ready"])
     if h.get("loaded") == model or h.get("free_gb") is None or m.get("need_gb") is None:
         return True
     return h["free_gb"] >= m["need_gb"]
@@ -150,6 +152,13 @@ def pick(role: str, model: str | None = None) -> dict | None:
         if found:
             return found
     return next((s for s in able if health(s).get("ok")), able[0] if able else None)
+
+
+def slots(role: str = "voices") -> int:
+    """Requests to keep in flight at the server doing this job: two per card it
+    uses (one working, the next waiting), so every card stays busy."""
+    server = pick(role)
+    return 2 * max(1, int(health(server).get("parallel") or 1)) if server else 2
 
 
 def has(role: str) -> bool:

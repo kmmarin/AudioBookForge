@@ -402,7 +402,8 @@ def main() -> None:
     if config.PUBLISH_URL:  # your voices go to the server too, so they can be picked there
         threading.Thread(target=publish.voice_sync_loop, args=(_stop,), daemon=True, name="voice-sync").start()
     # Cloned voices: threads that wait on the clone server, beside the pool.
-    clone_exec = ThreadPoolExecutor(max_workers=max(1, config.CLONE_WORKERS), thread_name_prefix="clone")
+    # Up to two parts per card the clone server uses (gpus.slots), at least CLONE_WORKERS.
+    clone_exec = ThreadPoolExecutor(max_workers=16, thread_name_prefix="clone")
     active: dict[str, ActiveBook] = {}
     samples: dict[Future, str] = {}  # sample in the pool -> sample id
     clone_samples: dict[Future, str] = {}  # sample at the clone server -> sample id
@@ -474,7 +475,13 @@ def main() -> None:
                 except Exception as exc:
                     fail(book["id"], exc)
 
-        top_up(clone_exec, active, clone_samples, clone=True, limit=max(1, config.CLONE_WORKERS))
+        clone_limit = max(1, config.CLONE_WORKERS)
+        if any(a.clone for a in active.values()):  # how many cards it can keep busy (cached health)
+            try:
+                clone_limit = min(16, max(clone_limit, gpus.slots()))
+            except Exception:
+                pass
+        top_up(clone_exec, active, clone_samples, clone=True, limit=clone_limit)
         if plan["submit"] and pool is not None:
             top_up(pool, active, samples, clone=False, limit=config.TTS_WORKERS + 1,
                    stage="starting" if warming else "voicing")

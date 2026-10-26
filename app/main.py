@@ -990,13 +990,16 @@ class GpuServerBody(BaseModel):
     token: str | None = None  # omitted: keep the saved one; "": none
 
 
-def _gpu_json(s: dict) -> dict:
-    h = gpus.health(s)
+def _gpu_json(s: dict, max_age: float = gpus.HEALTH_SECONDS) -> dict:
+    h = gpus.health(s, max_age)
     return {"id": s["id"], "name": s.get("name") or "", "url": s["url"], "source": s["source"],
             "has_token": bool(s.get("token")),
             "health": {"ok": bool(h.get("ok")), "error": h.get("error"), "gpu": h.get("gpu"), "gpu_gb": h.get("gpu_gb"),
                        "loaded": h.get("loaded"),
-                       "voices": [m["label"] for m in h.get("models") or [] if m.get("fits")]}}
+                       "voices": [m["label"] for m in h.get("models") or [] if m.get("fits")],
+                       # Each card, what its benchmark found, and whether it's used (a server
+                       # from before cards were told apart has none).
+                       "cards": h.get("cards")}}
 
 
 def _gpu_url(url: str | None) -> str:
@@ -1006,16 +1009,76 @@ def _gpu_url(url: str | None) -> str:
     return url
 
 
-def _gpu_list() -> dict:
+def _gpu_list(max_age: float = gpus.HEALTH_SECONDS) -> dict:
     gone = set(gpus.hidden())
-    return {"servers": [_gpu_json(s) for s in gpus.servers()], "file": str(gpus.FILE),
+    return {"servers": [_gpu_json(s, max_age) for s in gpus.servers()], "file": str(gpus.FILE),
             "hidden": [{"url": s["url"], "source": s["source"]} for s in gpus.extras(with_hidden=True)
                        if s["url"] in gone]}
 
 
 @app.get("/api/gpu-servers")
-def list_gpu_servers():
-    return _gpu_list()
+def list_gpu_servers(fresh: bool = False):
+    return _gpu_list(2 if fresh else gpus.HEALTH_SECONDS)
+
+
+def _gpu_client(server_id: str):
+    from .clone import Client
+    s = next((s for s in gpus.servers() if s["id"] == server_id), None)
+    if s is None:
+        raise HTTPException(404, "No such server.")
+    return Client(s["url"], s.get("token") or "", timeout=30)
+
+
+def _gpu_call(server_id: str, method: str, path: str, body: dict | None = None) -> dict:
+    from .clone import CloneError
+    try:
+        status, out = _gpu_client(server_id)._call(method, path, body)
+    except CloneError as exc:
+        raise HTTPException(502, str(exc))
+    if status == 404 and path in ("/api/cards", "/api/bench"):
+        raise HTTPException(409, "That GPU server is too old to choose cards or benchmark them: update it "
+                                 "(run its setup line again).")
+    if status >= 400:
+        raise HTTPException(status, out.get("detail") or f"The GPU server answered {status}")
+    return out
+
+
+class GpuCardsBody(BaseModel):
+    enabled: list[int]
+
+
+@app.post("/api/gpu-servers/{server_id}/cards")
+def gpu_server_cards(server_id: str, body: GpuCardsBody):
+    """Which of the server's cards do the work: each one in use takes requests at once."""
+    _gpu_call(server_id, "POST", "/api/cards", {"enabled": body.enabled})
+    return _gpu_list(0)
+
+
+class GpuBenchBody(BaseModel):
+    cards: list[int] | None = None  # default: every card in use
+
+
+@app.post("/api/gpu-servers/{server_id}/bench")
+def gpu_server_bench(server_id: str, body: GpuBenchBody):
+    """Benchmark the server's cards again, with one of this Forge's cloned voices
+    (the narrator's clip is what's measured). Each card takes the best model that
+    fits it; Settings shows the results as they come."""
+    import base64
+
+    from .clone import ref_key
+    found = sorted((v for v in voices.list_voices() if v["engine"] == "clone"),
+                   key=lambda v: v["model"] != "qwen3-tts-1.7b")
+    if not found:
+        raise HTTPException(409, "A benchmark speaks in a cloned voice: make one in Create a voice first. "
+                                 "Each card is benchmarked by itself before its first job anyway.")
+    audio = Path(found[0]["ref_audio"]).read_bytes()
+    key = ref_key(audio, found[0]["ref_text"])
+    client = _gpu_client(server_id)
+    if client._call("GET", f"/api/refs/{key}")[0] != 200:
+        _gpu_call(server_id, "PUT", f"/api/refs/{key}",
+                  {"text": found[0]["ref_text"].strip(), "audio": base64.b64encode(audio).decode()})
+    _gpu_call(server_id, "POST", "/api/bench", {"ref": key, "cards": body.cards})
+    return _gpu_list(0)
 
 
 @app.post("/api/gpu-servers")

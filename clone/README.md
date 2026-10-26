@@ -67,11 +67,32 @@ On an RX 6800, Qwen3-TTS 1.7B runs at about 3.8x real time in batches of 16, in 
 | `qwen3-tts-1.7b`, the best | about 7 GB | about 10 GB |
 | `qwen3-tts-0.6b` | about 3 GB | about 5.5 GB |
 
-`/api/health` says which ones fit this GPU.
+`/api/health` says which ones fit each card.
 
 - **GTX 16xx cards** run in float32, because they give NaNs in float16. On a 6 GB GTX 1660, 0.6B peaked at about 4.9 GB and was about 6.5x slower than real time.
 - **The CPU** works but is unusably slow for books: about 0.02x real time.
-- **Memory:** one model is loaded at a time, on first use. It's let go after `CLONE_IDLE_SECONDS` (default 300) without work, or on `POST /api/unload`.
+- **Memory:** on each card, one model is loaded at a time, on first use. It's let go after `CLONE_IDLE_SECONDS` (default 300) without work, or on `POST /api/unload`.
+
+## Every card, each benchmarked
+
+The server finds every card in the machine when it starts (whatever PyTorch
+sees), and each one works on its own requests at the same time.
+- **Which card gets a request:** the least busy one the model fits. A card too
+  small for a model (a 6 GB card and the 1.7B) is simply skipped for it, and the
+  card's own number format is used: bf16 on an RTX 4070, float32 on a GTX 1660.
+- **The benchmark:** before a card's first job with a model, it measures how
+  hard that card can be pushed, in the video memory free on it then. It says the
+  same sentences 2, 4, 8, 12, 16, 24 and 32 at a time, and stops at the first
+  batch that runs out of memory, or when bigger batches stop paying.
+- **What it keeps:** the fastest batch (the smallest within 5% of it), and the
+  share of the card that batch takes plus 0.5 GB of headroom. Results are kept
+  per card and model in `cards.json` in the data volume. The card uses them from
+  then on, instead of `CLONE_BATCH` and `CLONE_GPU_SHARE`.
+- **In Forge's Settings:** each server lists its cards with what their benchmark
+  found, a box to use each one or not, and **Benchmark** to measure again, for
+  example after something else starts sharing the card.
+- **Forge keeps every card busy:** it sends two requests per card the server
+  uses.
 
 ## Settings
 
@@ -79,9 +100,9 @@ On an RX 6800, Qwen3-TTS 1.7B runs at about 3.8x real time in batches of 16, in 
 |---|---|---|
 | `CLONE_TOKEN` | none | Required in `X-Forge-Token` on everything but `/api/health` |
 | `CLONE_IDLE_SECONDS` | 300 | When to let go of an unused model |
-| `CLONE_BATCH` | by video memory: 16 from 14 GB, 8 from 10 GB, else 4 | Sentences generated at once; falls back to one at a time if it runs out of video memory |
+| `CLONE_BATCH` | by video memory: 16 from 14 GB, 8 from 10 GB, else 4 | Sentences generated at once, until a card's benchmark has measured its own; falls back to one at a time if it runs out of video memory |
 | `CLONE_MIOPEN` | off | AMD cards: `on` uses MIOpen for convolutions. Off by default; it searched for kernels for every sentence length and took 95% of the time |
-| `CLONE_GPU_SHARE` | 0.9 | The most video memory it may take, so running out is an error, not a crash |
+| `CLONE_GPU_SHARE` | 0.9 | The most of a card's video memory it may take until that card is benchmarked, so running out is an error, not a crash |
 | `CLONE_DTYPE` | auto | `bfloat16`, `float16` or `float32` |
 | `CLONE_PORT` | 8100 | |
 
@@ -91,7 +112,7 @@ Forge's **Settings** page lists the clone servers it can use. A job goes to the 
 
 ## API
 
-The API is described in `app/clone.py`. Reference clips go to `PUT /api/refs/<key>`, where the key is a sha1 of the clip plus its text. `POST /api/speak` returns one WAV per sentence.
+The API is described in `app/clone.py`. Reference clips go to `PUT /api/refs/<key>`, where the key is a sha1 of the clip plus its text. `POST /api/speak` returns one WAV per sentence. `POST /api/cards` chooses the cards in use, and `POST /api/bench` benchmarks them again (with a reference clip already sent).
 
 `clone/test_server.py` checks a running server end to end:
 

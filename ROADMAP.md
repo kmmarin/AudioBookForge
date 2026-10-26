@@ -57,6 +57,8 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 - The clone server, for cloned voices: NVIDIA in Docker or WSL, or natively on Windows (NVIDIA or AMD Radeon).
 - A GPU server takes one line to set up on Windows or Linux, and ends by showing the address and token to paste into Forge.
 - **Settings → GPU servers:** several servers, with automatic failover. Each has a Test button, and changes are saved with Save.
+- Every card in a GPU server works at once, each benchmarked before its first job so it gets as much work as it can take; Settings shows the results, chooses the cards and benchmarks again.
+- Cloned voices fall back to this machine's own card when the model fits it.
 - Everything is on by default: the voice creator wherever there's an NVIDIA GPU, a clone server beside Forge on a card of 12 GB or more, even loudness and Kindle formats.
 - Installers:
   - Linux (`install.sh`)
