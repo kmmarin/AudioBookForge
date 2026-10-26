@@ -68,10 +68,36 @@ def ends_sentence(word: dict) -> bool:
     return bool(SENTENCE_END.search(word["word"].strip()))
 
 
+OPENS_QUOTE = re.compile(r"^[“\"‘]|^'(?=[A-Z])")  # "Go, ‘Go or 'Go (not 'em)
+CLOSES_QUOTE = re.compile(r"[”\"’]$|(?<=[,.!?…])'$")  # go." go,’ or go,' (not dogs')
+SAID = {"said", "says", "asked", "asks", "replied", "whispered", "shouted", "called", "cried", "answered",
+        "muttered", "told", "added", "snapped", "laughed", "yelled", "murmured", "continued", "went", "thought"}
+TAG_SUBJECTS = {"he", "she", "i", "they", "we", "you", "it"}
+
+
+def turn_changes(words: list[dict], j: int) -> bool:
+    """Whether the speaker may change between word j and the next: a quote
+    closes or opens, or a speech tag ("she said") follows a line Whisper wrote
+    without its quote marks. A narrator's character voices are cut apart from
+    their own, so each can be picked or left out by itself."""
+    a, b = words[j]["word"].strip(), words[j + 1]["word"].strip()
+    if CLOSES_QUOTE.search(a) or OPENS_QUOTE.search(b):
+        return True
+    if b.startswith("'") and re.search(r"[,:;]$", a):  # he said, 'go on.' (a quote picking up again)
+        return True
+    if j + 2 < len(words) and re.search(r"[,?!…]$", a):
+        subject = b.lower().strip(",")
+        verb = re.sub(r"[^\w]", "", words[j + 2]["word"].lower())
+        if verb in SAID and (subject in TAG_SUBJECTS or b[:1].isupper()):
+            return True
+    return False
+
+
 def group_words(words: list[dict]) -> list[tuple[int, int, bool]]:
     """Cut the word list into clips: (first word, last word, forced). Clips end
-    at the first sentence end past CLIP_TARGET, always at long pauses, and
-    never run past CLIP_MAX; forced means no clean pause was found in time."""
+    at the first sentence end past CLIP_TARGET, always at long pauses and where
+    the speaker may change (turn_changes), and never run past CLIP_MAX; forced
+    means no clean pause was found in time."""
     out, i, n = [], 0, len(words)
     while i < n:
         j, chosen, forced = i, None, False
@@ -79,7 +105,7 @@ def group_words(words: list[dict]) -> list[tuple[int, int, bool]]:
         while j + 1 < n:
             gap = words[j + 1]["start"] - words[j]["end"]
             dur = words[j]["end"] - words[i]["start"]
-            if gap >= HARD_GAP or words[j + 1]["music"] != words[j]["music"]:
+            if gap >= HARD_GAP or words[j + 1]["music"] != words[j]["music"] or turn_changes(words, j):
                 chosen = j
                 break
             sentence = ends_sentence(words[j])

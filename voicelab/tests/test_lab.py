@@ -79,6 +79,20 @@ class TestSegmenting(unittest.TestCase):
         self.assertTrue(g[0][2])
         self.assertLessEqual(spec[g[0][1]][2] - spec[g[0][0]][1], config.CLIP_MAX)
 
+    def test_cuts_where_the_speaker_changes(self):
+        def texts(spec):
+            ws = words(spec)
+            return [" ".join(w["word"].strip() for w in ws[i:k + 1]) for i, k, _ in analyze.group_words(ws)]
+        line = lambda *ws: [(w, n * 0.4, n * 0.4 + 0.35) for n, w in enumerate(ws)]  # no pauses at all
+        self.assertEqual(texts(line('He', 'stopped.', '"No,', 'we', 'don\'t,"', 'she', 'said.', '"Not', 'today."')),
+                         ["He stopped.", '"No, we don\'t,"', "she said.", '"Not today."'])
+        # Whisper often drops the quote marks: the speech tag still marks the turn.
+        self.assertEqual(texts(line("No,", "we", "don't,", "she", "said.")), ["No, we don't,", "she said."])
+        self.assertEqual(texts(line("'Wherever,'", "he", "said,", "'go", "home.'")), ["'Wherever,'", "he said,", "'go home.'"])
+        # Not a turn: apostrophes inside words and a plain comma.
+        self.assertEqual(texts(line("The", "dogs'", "bowls,", "he", "thought,", "were", "empty.")),
+                         ["The dogs' bowls,", "he thought, were empty."])
+
     def test_judge(self):
         clip = {"start": 0, "end": 4, "words": 8, "conf": 0.95, "unsure": 0.0, "snr": 40, "clipped": 0,
                 "_logprob": -0.2, "_ratio": 1.4}
@@ -264,6 +278,36 @@ class TestPicking(unittest.TestCase):
         with self.assertRaises(HTTPException) as foreign:
             main.save_picks(self.pid, main.PicksBody(picks={str(other.narrator[0]): 1}))
         self.assertEqual(foreign.exception.status_code, 404)
+
+    def test_matching_the_voice_marked(self):
+        from lab import main
+        readiness.finalize(self.pid)
+        nothing = main.list_picks(self.pid, filter="all", size=100)
+        self.assertEqual((nothing["matching"]["source"], nothing["sort"]), (None, "likeness"))
+        for clip in self.narrator[:3]:
+            main.set_reference(self.pid, clip, main.ReferenceBody(on=True))
+        page = main.list_picks(self.pid, filter="all", size=100)
+        self.assertEqual((page["matching"]["source"], page["matching"]["refs"], page["sort"]), ("reference", 3, "match"))
+        labels = {x["id"]: x["match_label"] for x in page["items"]}
+        self.assertTrue(all(labels[i] == "unlike" for i in self.others), labels)
+        close = [i for i in self.narrator if labels[i] == "close"]
+        self.assertGreater(len(close), 40)
+        self.assertEqual({x["id"] for x in page["items"][:3]} & set(self.others), set())  # best match first
+        res = main.approve_close(self.pid)
+        self.assertEqual(res["approved_now"], page["matching"]["close"])
+        picks = {r["id"]: r["pick"] for r in self.db.clips(self.pid)}
+        self.assertTrue(all(picks[i] is None for i in self.others))
+        main.set_reference(self.pid, self.narrator[0], main.ReferenceBody(on=False))
+        self.assertEqual(self.db.get_project(self.pid)["reference"], sorted(self.narrator[1:3]))
+
+    def test_cutting_again(self):
+        from lab import main
+        self.db.set_picks(self.pid, {self.narrator[0]: 1})
+        main.relisten(self.pid)
+        self.assertEqual(self.db.clips(self.pid), [])
+        s = self.db.get_source(self.sid)
+        self.assertEqual((s["status"], s["done_until"]), ("queued", 0))
+        self.assertTrue(self.db.job_waiting(self.pid, "analyze"))
 
     def test_listening_hears_everything(self):
         from lab import jobs

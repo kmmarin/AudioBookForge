@@ -298,6 +298,26 @@ def patch_project(project_id: str, body: ProjectPatch):
     return project_json(db.get_project(project_id), full=True)
 
 
+@app.post(BASE + "/api/projects/{project_id}/relisten")
+def relisten(project_id: str):
+    """Hear the recordings again and cut the clips anew (cuts where the speaker
+    changes came later): every clip, pick and reference goes; the recordings,
+    voices made and training rounds stay."""
+    project = require_project(project_id)
+    if project["status"] in TRAINING:
+        raise HTTPException(409, "This voice is training. Stop it first, then cut the clips again.")
+    jobs.stop_analysis(project_id)
+    for _ in range(50):
+        if not jobs.running(project_id, "analyze"):
+            break
+        time.sleep(0.1)
+    db.relisten(project_id)
+    db.update_project(project_id, readiness=None, reference=None, status="analyzing", progress=0.0,
+                      message="Listening again, to cut the clips where the speaker changes")
+    db.add_job(project_id, "analyze")
+    return project_json(db.get_project(project_id), full=True)
+
+
 # --- Picking the clips: the owner approves or leaves out each one --------------------
 
 PICK_FILTERS = ("review", "approved", "left_out", "dropped", "all")
@@ -324,19 +344,69 @@ def _pick_counts(rows: list[dict]) -> dict:
             "approved_minutes": round(sum(r["end"] - r["start"] for r in rows if r["pick"] == 1) / 60, 1)}
 
 
+CLOSE_MATCH, MAYBE_MATCH = 0.06, 0.15  # below how alike the references are to each other
+
+
+def _matching(project: dict, rows: list[dict]) -> dict:
+    """How much each clip sounds like the voice the owner wants: its speaker
+    fingerprint against the centre of the clips they marked as the reference
+    (else the clips they approved). The bar is set by how alike those are to
+    each other (or, with one or two, by the closest tenth of all clips):
+    within CLOSE_MATCH of it is a close match, within MAYBE_MATCH a maybe."""
+    import numpy as np
+
+    from . import speaker
+    listed = {r["id"] for r in rows}
+    refs = [i for i in project.get("reference") or [] if i in listed]
+    source = "reference" if refs else None
+    if not refs:
+        refs = [r["id"] for r in rows if r["pick"] == 1]
+        source = "approved" if refs else None
+    out = {"source": source, "refs": refs, "match": {}, "label": {}}
+    if not refs:
+        return out
+    unit = lambda v: v / max(float(np.linalg.norm(v)), 1e-9)
+    embs = {r["id"]: unit(speaker.from_blob(r["embedding"])) for r in db.clips(project["id"], with_embedding=True)
+            if r["id"] in listed and r["embedding"]}
+    ref_embs = [embs[i] for i in refs if i in embs]
+    if not ref_embs:
+        out["source"] = None
+        return out
+    center = unit(np.mean(ref_embs, axis=0))
+    match = {i: float(v @ center) for i, v in embs.items()}
+    if len(ref_embs) >= 3:  # each reference against the others' centre
+        typical = float(np.median([ref_embs[k] @ unit(np.mean(ref_embs[:k] + ref_embs[k + 1:], axis=0))
+                                   for k in range(len(ref_embs))]))
+    else:
+        others = sorted((m for i, m in match.items() if i not in refs), reverse=True)
+        typical = others[max(0, len(others) // 10 - 1)] if others else 0.7
+    out.update(match=match, typical=round(typical, 3), label={
+        i: "close" if m >= typical - CLOSE_MATCH else "maybe" if m >= typical - MAYBE_MATCH else "unlike"
+        for i, m in match.items()})
+    return out
+
+
 @app.get(BASE + "/api/projects/{project_id}/picks")
-def list_picks(project_id: str, filter: str = "review", sort: str = "likeness", page: int = 1, size: int = 50):
-    """One page of clips to review: least like the narrator first (character
-    voices come up early), or in book order."""
+def list_picks(project_id: str, filter: str = "review", sort: str = "auto", page: int = 1, size: int = 50):
+    """One page of clips to review: most like the voice the owner chose first
+    (once they've marked or approved some), least like the narrator first
+    (character voices come up early), or in book order."""
     from . import readiness
     project = require_project(project_id)
-    if filter not in PICK_FILTERS or sort not in ("likeness", "order"):
+    if filter not in PICK_FILTERS or sort not in ("auto", "match", "likeness", "order"):
         raise HTTPException(400, "Unknown filter or sort")
     size = max(1, min(size, 200))
     rows, sources = _pickable(project_id)
+    m = _matching(project, rows)
+    if sort == "auto":
+        sort = "match" if m["source"] else "likeness"
+    if sort == "match" and not m["source"]:
+        sort = "likeness"
     order = {sid: n for n, sid in enumerate(sources)}
     listed = [r for r in rows if _in_filter(r, filter)]
-    if sort == "likeness":
+    if sort == "match":
+        listed.sort(key=lambda r: (-m["match"].get(r["id"], -1.0), order[r["source_id"]], r["start"]))
+    elif sort == "likeness":
         listed.sort(key=lambda r: (r["sim"] is None, r["sim"] or 0, order[r["source_id"]], r["start"]))
     else:
         listed.sort(key=lambda r: (order[r["source_id"]], r["start"]))
@@ -346,12 +416,48 @@ def list_picks(project_id: str, filter: str = "review", sort: str = "likeness", 
         "items": [{"id": r["id"], "text": r["text"], "seconds": round(r["end"] - r["start"], 2),
                    "source": sources[r["source_id"]]["filename"], "at": round(r["start"], 2), "sim": r["sim"],
                    "verdict": r["verdict"], "reason": readiness.REASONS.get(r["verdict"] or ""),
-                   "pick": r["pick"], "role": r["role"]} for r in page_rows],
-        "total": len(listed), "page": max(1, page), "size": size, **_pick_counts(rows),
+                   "pick": r["pick"], "role": r["role"], "match": m["match"].get(r["id"]),
+                   "match_label": m["label"].get(r["id"]), "reference": r["id"] in (project.get("reference") or [])}
+                  for r in page_rows],
+        "total": len(listed), "page": max(1, page), "size": size, "sort": sort, **_pick_counts(rows),
         "threshold": (report.get("speaker") or {}).get("threshold"),
         "thresholds": {"usable": config.READY_USABLE, "good": config.READY_GOOD, "great": config.READY_GREAT},
         "picking": bool(project.get("picking")),
+        "matching": {"source": m["source"], "refs": len(m["refs"]), "typical": m.get("typical"),
+                     "close": sum(1 for r in rows if r["pick"] is None and m["label"].get(r["id"]) == "close")},
     }
+
+
+class ReferenceBody(BaseModel):
+    on: bool
+
+
+@app.post(BASE + "/api/projects/{project_id}/picks/reference/{clip_id}")
+def set_reference(project_id: str, clip_id: int, body: ReferenceBody):
+    """Mark a clip as (or no longer as) the voice to match: every clip is scored against these."""
+    project = require_project(project_id)
+    rows, _ = _pickable(project_id)
+    if clip_id not in {r["id"] for r in rows}:
+        raise HTTPException(404, "That isn’t one of this project’s clips to pick from.")
+    refs = set(project.get("reference") or [])
+    refs = refs | {clip_id} if body.on else refs - {clip_id}
+    db.update_project(project_id, reference=sorted(refs) or None)
+    return {"reference": sorted(refs)}
+
+
+@app.post(BASE + "/api/projects/{project_id}/picks/approve-close")
+def approve_close(project_id: str):
+    """Approve every clip not reviewed yet that closely matches the voice chosen."""
+    project = require_project(project_id)
+    rows, _ = _pickable(project_id)
+    m = _matching(project, rows)
+    if not m["source"]:
+        raise HTTPException(409, "Mark a clip or two that sound right (★), or approve some, first.")
+    picks = {r["id"]: 1 for r in rows if r["pick"] is None and m["label"].get(r["id"]) == "close"}
+    db.set_picks(project_id, picks)
+    report = refresh_readiness(project_id)
+    rows, _ = _pickable(project_id)
+    return {**_pick_counts(rows), "approved_now": len(picks), "readiness": report}
 
 
 class PicksBody(BaseModel):

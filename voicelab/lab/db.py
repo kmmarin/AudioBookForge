@@ -85,12 +85,16 @@ CREATE TABLE IF NOT EXISTS jobs (
 # clone: the reference clips tried for a cloned voice and how each sample turned out;
 # picking: 1 = train and check only on the clips the owner approved (clips.pick:
 # null not reviewed, 1 approved, 0 left out).
-ADDED = {"projects": (("model", "TEXT"), ("clone", "TEXT"), ("picking", "INTEGER NOT NULL DEFAULT 0")),
+# reference: the clips the owner marked as how the narrator should sound; every
+# clip is matched against them when picking.
+ADDED = {"projects": (("model", "TEXT"), ("clone", "TEXT"), ("picking", "INTEGER NOT NULL DEFAULT 0"),
+                      ("reference", "TEXT")),
          "clips": (("pick", "INTEGER"),)}
 
-JSON_FIELDS = {"readiness", "training", "quality", "tags", "gaps", "chapters", "clone"}
+JSON_FIELDS = {"readiness", "training", "quality", "tags", "gaps", "chapters", "clone", "reference"}
 PROJECT_COLUMNS = {"name", "name_source", "name_note", "accent", "status", "progress", "message",
-                   "readiness", "training", "quality", "voice_slug", "auto_train", "model", "clone", "picking"}
+                   "readiness", "training", "quality", "voice_slug", "auto_train", "model", "clone", "picking",
+                   "reference"}
 SOURCE_COLUMNS = {"filename", "path", "size", "received", "duration", "tags", "status", "done_until",
                   "last_end", "gaps", "message", "fingerprint", "chapters"}
 
@@ -276,6 +280,17 @@ def get_clip(clip_id: int) -> dict | None:
     row = conn().execute("SELECT id, project_id, source_id, start, end, text, verdict, role, pick"
                          " FROM clips WHERE id = ?", (clip_id,)).fetchone()
     return dict(row) if row else None
+
+
+def relisten(project_id: str) -> None:
+    """Forget every clip, so the recordings are heard and cut again from the start
+    (the recordings themselves stay)."""
+    with transaction() as c:
+        c.execute("DELETE FROM clips WHERE project_id = ?", (project_id,))
+        c.execute("UPDATE sources SET status = 'queued', done_until = 0, last_end = 0, gaps = NULL,"
+                  " message = 'Waiting to be heard again' WHERE project_id = ? AND status IN ('done', 'analyzing', 'queued')",
+                  (project_id,))
+        c.execute("UPDATE projects SET updated = ? WHERE id = ?", (time.time(), project_id))
 
 
 def set_picks(project_id: str, picks: dict[int, int | None]) -> None:
