@@ -371,6 +371,206 @@ function renderReadiness(d) {
   spread.setAttribute("aria-label", parts.filter((p) => p[2] > 0).map((p) => `${p[1]}: ${mins(p[2])}`).join("; "));
 }
 
+// ------------------------------------------------------- pick the clips
+// The owner listens and approves the clips that are the narrator's own voice
+// (lab/readiness.py). Choices save as they go, a few at a time.
+const P = { project: null, filter: "review", sort: "likeness", page: 1, data: null, stamp: null,
+            pending: new Map(), prev: new Map(), timer: null };
+const PICK_TABS = [["review", "To review"], ["approved", "Approved"], ["left_out", "Left out"], ["dropped", "Dropped by the check"]];
+
+function renderPicks(d) {
+  const card = $("#pick-card");
+  card.hidden = !(d.readiness || d.picking);
+  if (card.hidden) return;
+  if (document.activeElement !== $("#pk-on")) $("#pk-on").checked = d.picking;
+  const stamp = JSON.stringify((d.readiness || {}).picks || null);
+  if (P.project !== d.id) {
+    Object.assign(P, { project: d.id, filter: "review", page: 1, data: null, stamp });
+    P.pending.clear();
+    P.prev.clear();
+    loadPicks();
+  } else if (stamp !== P.stamp) {
+    P.stamp = stamp;  // more heard, or picked elsewhere: fresh counts, and fresh rows unless a row is in use
+    if (!P.pending.size) loadPicks(card.contains(document.activeElement));
+  }
+  pickTotal();
+}
+
+async function loadPicks(countsOnly = false) {
+  const id = P.project;
+  const q = new URLSearchParams({ filter: P.filter, sort: P.sort, page: P.page, size: 50 });
+  try {
+    const data = await api(`/api/projects/${id}/picks?${q}`);
+    if (id !== P.project) return;
+    if (countsOnly && P.data) Object.assign(P.data, { counts: data.counts, approved_minutes: data.approved_minutes });
+    else { P.data = data; drawPicks(); }
+    pickTotal();
+  } catch (err) { fail(err); }
+}
+
+function pickTotal() {
+  const d = P.data;
+  if (!d) return;
+  const t = d.thresholds, m = d.approved_minutes;
+  const tiers = [["Usable", t.usable], ["Good", t.good], ["Great", t.great]];
+  const reached = tiers.filter(([, need]) => m >= need).pop();
+  const next = tiers.find(([, need]) => m < need);
+  let text = `${plural(d.counts.approved, "clip")} approved · ${m.toFixed(1)} min`;
+  if (reached) text += `: ${reached[0]} (${reached[1]} min) reached`;
+  if (next) text += `${reached ? ";" : ":"} ${next[0]} needs ${next[1]}`;
+  if (!S.detail?.picking) text += ". Picks aren’t used until “Only use the clips I approve” is on.";
+  $("#pk-total").textContent = text;
+  for (const btn of $("#pk-tabs").children) {
+    btn.textContent = `${btn.dataset.label} ${(d.counts[btn.dataset.filter] || 0).toLocaleString()}`;
+  }
+}
+
+function drawPicks() {
+  const d = P.data;
+  $("#pk-tabs").replaceChildren(...PICK_TABS.map(([key, label]) => {
+    const btn = el("button", { type: "button", class: "quiet", dataset: { filter: key, label } });
+    btn.setAttribute("aria-pressed", String(key === P.filter));
+    btn.addEventListener("click", async () => {
+      await flushPicks();
+      Object.assign(P, { filter: key, page: 1 });
+      loadPicks();
+    });
+    return btn;
+  }));
+  $("#pk-sort").value = P.sort;
+  const rows = $("#pk-rows");
+  rows.replaceChildren(...d.items.map(pickRow));
+  if (!d.items.length) {
+    rows.append(el("li", { class: "pick-empty", textContent: P.filter === "review"
+      ? "Nothing left to review here. The clips are still being heard, or every one has been picked."
+      : "No clips here." }));
+  }
+  const pages = Math.max(1, Math.ceil(d.total / d.size));
+  $("#pk-page").textContent = `Page ${d.page} of ${pages}`;
+  $("#pk-prev").disabled = d.page <= 1;
+  $("#pk-next").disabled = d.page >= pages;
+  $("#pk-approve-page").disabled = $("#pk-leave-page").disabled = !d.items.length;
+}
+
+function pickRow(item) {
+  const d = P.data;
+  const li = el("li", { tabIndex: 0, dataset: { id: item.id } });
+  li.setAttribute("aria-label", item.text);
+  const play = playButton(`/api/projects/${P.project}/clips/${item.id}.wav`, "Play this clip");
+  play.tabIndex = -1;
+  const use = el("input", { type: "checkbox", checked: item.pick === 1 });
+  use.setAttribute("aria-label", `Use “${item.text.slice(0, 60)}”`);
+  use.addEventListener("change", () => setPick(item, use.checked ? 1 : 0, li));
+  // How much it sounds like the narrator, against the check's cut-off (the mark).
+  const like = el("div", { class: "pk-like" }, el("i"), el("b"));
+  const sim = item.sim ?? null;
+  if (sim !== null) {
+    like.firstChild.style.width = `${Math.round(Math.max(0, Math.min(1, sim)) * 100)}%`;
+    like.classList.toggle("low", d.threshold !== null && sim < d.threshold);
+    like.title = `Like the narrator: ${pct(sim)}${d.threshold !== null ? ` (the check drops below ${pct(d.threshold)})` : ""}`;
+  } else like.title = "Not measured yet";
+  if (d.threshold !== null) like.lastChild.style.left = `${Math.round(d.threshold * 100)}%`;
+  else like.lastChild.hidden = true;
+  const meta = [`${item.seconds.toFixed(1)} s`, item.source, clock(item.at)];
+  if (["other_voice", "announcer"].includes(item.verdict) && item.pick === null) meta.push("dropped as another voice");
+  li.append(play, el("div", {}, el("p", { class: "pk-text", textContent: item.text }), el("p", { class: "pk-meta", textContent: meta.join(" · ") })),
+    like, el("label", { class: "pk-use" }, use, "Use"));
+  stylePick(li, item.pick);
+  return li;
+}
+
+function stylePick(li, pick) {
+  li.classList.toggle("approved", pick === 1);
+  li.classList.toggle("left-out", pick === 0);
+  const box = $("input[type=checkbox]", li);
+  if (box) box.checked = pick === 1;
+}
+
+function setPick(item, value, li) {
+  if (!P.prev.has(item.id)) P.prev.set(item.id, item.pick);
+  item.pick = value;
+  stylePick(li, value);
+  P.pending.set(item.id, value);
+  clearTimeout(P.timer);
+  P.timer = setTimeout(flushPicks, 500);
+}
+
+async function flushPicks() {
+  clearTimeout(P.timer);
+  P.timer = null;
+  if (!P.pending.size) return;
+  const batch = new Map(P.pending), prev = new Map(P.prev);
+  P.pending.clear();
+  P.prev.clear();
+  try {
+    const res = await api(`/api/projects/${P.project}/picks`, { method: "PUT", json: { picks: Object.fromEntries(batch) } });
+    Object.assign(P.data, { counts: res.counts, approved_minutes: res.approved_minutes });
+    if (S.detail && res.readiness) {
+      S.detail.readiness = res.readiness;
+      P.stamp = JSON.stringify(res.readiness.picks || null);
+      renderReadiness(S.detail);
+    }
+    pickTotal();
+  } catch (err) {
+    fail(err);
+    for (const [id, old] of prev) {  // back as they were
+      const item = P.data?.items.find((x) => x.id === id);
+      if (item) item.pick = old;
+      const li = $(`#pk-rows li[data-id="${id}"]`);
+      if (li) stylePick(li, old);
+    }
+  }
+}
+
+function wirePicks() {
+  $("#pk-on").addEventListener("change", async (e) => {
+    const on = e.target.checked;
+    try {
+      S.detail = await api(`/api/projects/${S.current}`, { method: "PATCH", json: { picking: on } });
+      renderProject();
+      loadPicks();
+      toast(on ? "Only the clips you approve are used now. Every recording is listened to, so there’s all of it to pick from."
+        : "The automatic choice is back. Your picks are kept for later.");
+    } catch (err) { e.target.checked = !on; fail(err); }
+  });
+  $("#pk-sort").addEventListener("change", async () => {
+    await flushPicks();
+    Object.assign(P, { sort: $("#pk-sort").value, page: 1 });
+    loadPicks();
+  });
+  for (const [id, step] of [["#pk-prev", -1], ["#pk-next", 1]]) {
+    $(id).addEventListener("click", async () => {
+      await flushPicks();
+      P.page += step;
+      loadPicks();
+    });
+  }
+  for (const [id, value] of [["#pk-approve-page", 1], ["#pk-leave-page", 0]]) {
+    $(id).addEventListener("click", () => {
+      for (const li of $("#pk-rows").querySelectorAll("li[data-id]")) {
+        const item = P.data.items.find((x) => x.id === Number(li.dataset.id));
+        if (item && item.pick !== value) setPick(item, value, li);
+      }
+    });
+  }
+  // On a row: Space plays, A approves, X leaves out (both move on), arrows move.
+  $("#pk-rows").addEventListener("keydown", (e) => {
+    const li = e.target.closest("li[data-id]");
+    if (!li || e.target.matches("input") && e.key !== "a" && e.key !== "x" || e.metaKey || e.ctrlKey || e.altKey) return;
+    const item = P.data.items.find((x) => x.id === Number(li.dataset.id));
+    const move = (to) => { if (to?.dataset.id) to.focus(); };
+    const key = e.key.toLowerCase();
+    if (key === " ") { e.preventDefault(); $("button.play", li).click(); }
+    else if (key === "a" || key === "x") {
+      e.preventDefault();
+      setPick(item, key === "a" ? 1 : 0, li);
+      move(li.nextElementSibling);
+    } else if (e.key === "ArrowDown") { e.preventDefault(); move(li.nextElementSibling); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); move(li.previousElementSibling); }
+  });
+  addEventListener("pagehide", flushPicks);
+}
+
 function trainingText(d) {
   const t = d.training || {};
   const busy = d.status === "training";
@@ -630,6 +830,7 @@ function renderProject() {
   st.textContent = showStatus ? (d.status === "analyzing" ? `${d.message || "Listening"}. The report appears when it’s done.` : d.message || "") : "";
   st.classList.toggle("bad", d.status === "failed");
   renderReadiness(d);
+  renderPicks(d);
   renderClone(d);
   renderTraining(d);
   renderQuality(d);
@@ -861,6 +1062,7 @@ function wire() {
     try { S.detail = await api(`/api/projects/${S.current}/stop`, { method: "POST" }); renderProject(); }
     catch (err) { fail(err); }
   });
+  wirePicks();
   $("#v-remove").addEventListener("click", () => S.detail?.voice && removeVoice(S.detail.voice));
   $("#p-remove").addEventListener("click", async () => {
     const d = S.detail;

@@ -113,6 +113,33 @@
         <ol class="legend" id="r-legend"></ol>
       </div>
 
+      <div class="lab-card" id="pick-card" hidden>
+        <div class="card-head">
+          <h3>Pick the clips</h3>
+          <label class="check pick-on"><input type="checkbox" id="pk-on"> Only use the clips I approve</label>
+        </div>
+        <p class="status-line" id="pk-total" aria-live="polite"></p>
+        <p class="hint" id="pk-intro">Narrators do character voices, and some of those slip past the automatic check. Listen, and approve the clips that are the narrator’s own voice. With “Only use the clips I approve” on, training and its quality check use only those, and every recording is listened to so there’s all of it to choose from.</p>
+        <div class="pick-bar">
+          <div class="pick-tabs" id="pk-tabs" role="group" aria-label="Show"></div>
+          <select id="pk-sort" aria-label="Order">
+            <option value="likeness">Least like the narrator first</option>
+            <option value="order">In book order</option>
+          </select>
+        </div>
+        <ol class="pick-rows" id="pk-rows" aria-label="Clips"></ol>
+        <div class="pick-foot">
+          <button type="button" class="quiet" id="pk-approve-page">Approve all on this page</button>
+          <button type="button" class="quiet" id="pk-leave-page">Leave out all on this page</button>
+          <span class="pager">
+            <button type="button" class="quiet" id="pk-prev" aria-label="Previous page">‹</button>
+            <span id="pk-page" aria-live="polite"></span>
+            <button type="button" class="quiet" id="pk-next" aria-label="Next page">›</button>
+          </span>
+        </div>
+        <p class="hint pick-keys">On a row: Space plays · A approves · X leaves out · ↑ ↓ move</p>
+      </div>
+
       <div class="lab-card" id="clone-card" hidden>
         <div class="card-head">
           <h3>Cloned voice</h3>

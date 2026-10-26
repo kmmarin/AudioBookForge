@@ -81,7 +81,7 @@ def project_json(p: dict, full: bool = False, choices: list[dict] | None = None)
         "id": p["id"], "name": p["name"], "name_source": p["name_source"], "name_note": p["name_note"],
         "accent": p["accent"], "status": p["status"], "progress": p["progress"], "message": p["message"],
         "voice_slug": p["voice_slug"], "updated": p["updated"], "created": p["created"],
-        "auto_train": bool(p["auto_train"]),
+        "auto_train": bool(p["auto_train"]), "picking": bool(p.get("picking")),
         "minutes": round(sum(float(s["duration"] or 0) for s in sources) / 60, 1),
         "usable_minutes": (p["readiness"] or {}).get("usable_minutes"),
         "rating": (p["readiness"] or {}).get("rating"),
@@ -241,6 +241,21 @@ class ProjectPatch(BaseModel):
     accent: str | None = None
     auto_train: bool | None = None
     model: str | None = None  # a clone model, or "piper" (lab/clone.py)
+    picking: bool | None = None  # only use the clips the owner approves
+
+
+def refresh_readiness(project_id: str) -> dict | None:
+    """The report again after picks change; while training, picks wait for the next round."""
+    from . import readiness
+    project = db.get_project(project_id)
+    if project["status"] in TRAINING or not db.sources(project_id):
+        return project["readiness"]
+    report = readiness.finalize(project_id)
+    fields = {"readiness": report}
+    if project["status"] == "ready":
+        fields["message"] = f"{report['rating']['label']}: {report['usable_minutes']:g} usable minutes"
+    db.update_project(project_id, **fields)
+    return report
 
 
 @app.patch(BASE + "/api/projects/{project_id}")
@@ -270,9 +285,99 @@ def patch_project(project_id: str, body: ProjectPatch):
         except clone.CantClone as exc:
             raise HTTPException(exc.status, str(exc))
         fields["model"] = body.model
+    if body.picking is not None:
+        fields["picking"] = int(body.picking)
     if fields:
         db.update_project(project_id, **fields)
+    if body.picking is not None and bool(body.picking) != bool(project.get("picking")):
+        # Picking needs everything heard: what was skipped as plenty is heard now.
+        if body.picking and jobs.hear_everything(project_id) and project["status"] not in TRAINING:
+            db.update_project(project_id, status="analyzing", progress=0.0,
+                              message="Listening to the rest of the recordings, so there’s all of it to pick from")
+        refresh_readiness(project_id)
     return project_json(db.get_project(project_id), full=True)
+
+
+# --- Picking the clips: the owner approves or leaves out each one --------------------
+
+PICK_FILTERS = ("review", "approved", "left_out", "dropped", "all")
+
+
+def _pickable(project_id: str) -> tuple[list[dict], dict[str, dict]]:
+    """The clips the owner can choose from (never one with a hard reason), and the recordings."""
+    from . import readiness
+    sources = {s["id"]: s for s in db.sources(project_id) if s["status"] not in ("duplicate", "failed", "uploading")}
+    rows = [r for r in db.clips(project_id) if r["source_id"] in sources and r["reason"] is None
+            and (r["verdict"] in readiness.PICKABLE or r["verdict"] is None)]  # None: heard since the last report
+    return rows, sources
+
+
+def _in_filter(r: dict, name: str) -> bool:
+    from . import readiness
+    return (name == "all" or (name == "approved" and r["pick"] == 1) or (name == "left_out" and r["pick"] == 0)
+            or (name == "dropped" and r["pick"] is None and r["verdict"] in readiness.RESCUABLE)
+            or (name == "review" and r["pick"] is None and r["verdict"] not in readiness.RESCUABLE))
+
+
+def _pick_counts(rows: list[dict]) -> dict:
+    return {"counts": {f: sum(1 for r in rows if _in_filter(r, f)) for f in PICK_FILTERS},
+            "approved_minutes": round(sum(r["end"] - r["start"] for r in rows if r["pick"] == 1) / 60, 1)}
+
+
+@app.get(BASE + "/api/projects/{project_id}/picks")
+def list_picks(project_id: str, filter: str = "review", sort: str = "likeness", page: int = 1, size: int = 50):
+    """One page of clips to review: least like the narrator first (character
+    voices come up early), or in book order."""
+    from . import readiness
+    project = require_project(project_id)
+    if filter not in PICK_FILTERS or sort not in ("likeness", "order"):
+        raise HTTPException(400, "Unknown filter or sort")
+    size = max(1, min(size, 200))
+    rows, sources = _pickable(project_id)
+    order = {sid: n for n, sid in enumerate(sources)}
+    listed = [r for r in rows if _in_filter(r, filter)]
+    if sort == "likeness":
+        listed.sort(key=lambda r: (r["sim"] is None, r["sim"] or 0, order[r["source_id"]], r["start"]))
+    else:
+        listed.sort(key=lambda r: (order[r["source_id"]], r["start"]))
+    report = project["readiness"] or {}
+    page_rows = listed[(max(1, page) - 1) * size: max(1, page) * size]
+    return {
+        "items": [{"id": r["id"], "text": r["text"], "seconds": round(r["end"] - r["start"], 2),
+                   "source": sources[r["source_id"]]["filename"], "at": round(r["start"], 2), "sim": r["sim"],
+                   "verdict": r["verdict"], "reason": readiness.REASONS.get(r["verdict"] or ""),
+                   "pick": r["pick"], "role": r["role"]} for r in page_rows],
+        "total": len(listed), "page": max(1, page), "size": size, **_pick_counts(rows),
+        "threshold": (report.get("speaker") or {}).get("threshold"),
+        "thresholds": {"usable": config.READY_USABLE, "good": config.READY_GOOD, "great": config.READY_GREAT},
+        "picking": bool(project.get("picking")),
+    }
+
+
+class PicksBody(BaseModel):
+    picks: dict[str, int | None]  # clip id -> 1 approved, 0 left out, null not reviewed
+
+
+@app.put(BASE + "/api/projects/{project_id}/picks")
+def save_picks(project_id: str, body: PicksBody):
+    """Saved in one go, then the report again (while training, they apply to the next round)."""
+    from . import readiness
+    require_project(project_id)
+    mine = {r["id"]: r for r in db.clips(project_id)}
+    picks: dict[int, int | None] = {}
+    for key, value in body.picks.items():
+        clip = mine.get(int(key)) if key.isdigit() else None
+        if clip is None:
+            raise HTTPException(404, f"Clip {key} isn’t in this project.")
+        if value not in (0, 1, None):
+            raise HTTPException(400, "A pick is 1 (approve), 0 (leave out) or null.")
+        if clip["reason"] or clip["verdict"] in readiness.HARD:
+            raise HTTPException(409, f"Clip {key} can’t be used: {readiness.REASONS.get(clip['reason'] or clip['verdict'], 'it was rejected')}.")
+        picks[clip["id"]] = value
+    db.set_picks(project_id, picks)
+    report = refresh_readiness(project_id)
+    rows, _ = _pickable(project_id)
+    return {**_pick_counts(rows), "readiness": report}
 
 
 @app.delete(BASE + "/api/projects/{project_id}")

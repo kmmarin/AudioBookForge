@@ -82,12 +82,15 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 # Columns added after the first release (ALTER is safe to race between processes).
 # model: what the voice is made with (lab/clone.py), null = the best this setup runs;
-# clone: the reference clips tried for a cloned voice and how each sample turned out.
-ADDED = {"projects": (("model", "TEXT"), ("clone", "TEXT"))}
+# clone: the reference clips tried for a cloned voice and how each sample turned out;
+# picking: 1 = train and check only on the clips the owner approved (clips.pick:
+# null not reviewed, 1 approved, 0 left out).
+ADDED = {"projects": (("model", "TEXT"), ("clone", "TEXT"), ("picking", "INTEGER NOT NULL DEFAULT 0")),
+         "clips": (("pick", "INTEGER"),)}
 
 JSON_FIELDS = {"readiness", "training", "quality", "tags", "gaps", "chapters", "clone"}
 PROJECT_COLUMNS = {"name", "name_source", "name_note", "accent", "status", "progress", "message",
-                   "readiness", "training", "quality", "voice_slug", "auto_train", "model", "clone"}
+                   "readiness", "training", "quality", "voice_slug", "auto_train", "model", "clone", "picking"}
 SOURCE_COLUMNS = {"filename", "path", "size", "received", "duration", "tags", "status", "done_until",
                   "last_end", "gaps", "message", "fingerprint", "chapters"}
 
@@ -264,15 +267,23 @@ def add_clips(project_id: str, source_id: str, clips: list[dict], done_until: fl
 def clips(project_id: str, with_embedding: bool = False) -> list[dict]:
     cols = "*" if with_embedding else ", ".join(
         ["id", "source_id", "start", "end", "text", "words", "conf", "unsure", "snr", "clipped",
-         "reason", "sim", "verdict", "role"])
+         "reason", "sim", "verdict", "role", "pick"])
     return [dict(r) for r in conn().execute(
         f"SELECT {cols} FROM clips WHERE project_id = ? ORDER BY source_id, start", (project_id,))]
 
 
 def get_clip(clip_id: int) -> dict | None:
-    row = conn().execute("SELECT id, project_id, source_id, start, end, text, verdict, role"
+    row = conn().execute("SELECT id, project_id, source_id, start, end, text, verdict, role, pick"
                          " FROM clips WHERE id = ?", (clip_id,)).fetchone()
     return dict(row) if row else None
+
+
+def set_picks(project_id: str, picks: dict[int, int | None]) -> None:
+    """The owner's choices (1 approved, 0 left out, None not reviewed), in one
+    go; only this project's clips are touched."""
+    with transaction() as c:
+        c.executemany("UPDATE clips SET pick = ? WHERE id = ? AND project_id = ?",
+                      [(pick, int(clip_id), project_id) for clip_id, pick in picks.items()])
 
 
 def set_verdicts(rows: list[tuple]) -> None:

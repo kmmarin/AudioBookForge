@@ -33,7 +33,14 @@ REASONS = {
     "skipped": "Not listened to: there was already plenty",
     "unheard": "Not listened to: you went ahead with what had been heard",
     "not_needed": "Not needed: the best clips are enough",
+    "left_out": "Left out by you",
+    "unreviewed": "Not approved yet: only the clips you approve are used",
 }
+# Picking the clips (projects.picking, clips.pick): approving a clip overrides
+# the speaker check, but not these; nothing the owner picks can bring them back.
+HARD = {"music", "credits", "too_short", "too_long", "clipped", "noisy", "unclear", "duplicate"}
+RESCUABLE = {"other_voice", "announcer"}  # dropped by the speaker check: the owner can approve them
+PICKABLE = {"keep", "not_needed", "left_out"} | RESCUABLE  # verdicts listed for review
 INTRO_SECONDS = 180  # another person's voice this close to a file's start or end is an intro or announcer
 ANNOUNCER_SIM = 0.35  # "another person": a narrator's own character voices stay above this
 
@@ -221,7 +228,19 @@ def finalize(project_id: str) -> dict:
             verdicts[r["id"]] = "other_voice"
         else:
             verdicts[r["id"]] = "keep"
-    kept = sorted((r for r in rows if verdicts[r["id"]] == "keep"),
+    # The owner's picks: left out never trains or checks; approved overrides the
+    # speaker check (a character voice they want), never a hard reason.
+    # With picking off they wait, and everything is as it was.
+    picking = bool(project.get("picking"))
+    for r in rows:
+        if not picking or verdicts[r["id"]] in HARD:
+            continue
+        if r.get("pick") == 0:
+            verdicts[r["id"]] = "left_out"
+        elif r.get("pick") == 1:
+            verdicts[r["id"]] = "keep"
+    approved = {r["id"] for r in rows if picking and r.get("pick") == 1 and verdicts[r["id"]] == "keep"}
+    kept = sorted((r for r in rows if verdicts[r["id"]] == "keep" and (not picking or r["id"] in approved)),
                   key=lambda r: (order.get(r["source_id"], 0), r["start"]))
 
     # Clips for the quality check: whole sentences of 2.5-10 s, spread through
@@ -240,14 +259,15 @@ def finalize(project_id: str) -> dict:
             holdout += [r for r in candidates if r["id"] in picked]
     held = {r["id"] for r in holdout}
 
-    # Training: the best clips first, up to the cap.
+    # Training: the clips the owner approved, then the best of the rest, up to the cap.
     def score(r):
         return (min(r["snr"] or 0, 50) / 50 + (r["conf"] or 0) + sims.get(r["id"], 0)
                 + (0.3 if 2 <= r["end"] - r["start"] <= 12 else 0))
     budget = config.TRAIN_MAX_MINUTES * 60
     train_ids, train_seconds = set(), 0.0
-    for r in sorted((r for r in kept if r["id"] not in held), key=score, reverse=True):
-        if train_seconds + (r["end"] - r["start"]) > budget:
+    for r in sorted((r for r in kept if r["id"] not in held), key=lambda r: (r["id"] in approved, score(r)),
+                    reverse=True):
+        if r["id"] not in approved and train_seconds + (r["end"] - r["start"]) > budget:
             break
         train_ids.add(r["id"])
         train_seconds += r["end"] - r["start"]
@@ -260,15 +280,15 @@ def finalize(project_id: str) -> dict:
         verdict = verdicts[r["id"]]
         role = "holdout" if r["id"] in held else "train" if r["id"] in train_ids else None
         if verdict == "keep" and role is None:
-            verdict = "not_needed"
+            verdict = "not_needed"  # with picking on, every clip not approved yet
         updates.append((sims.get(r["id"]), verdict, role, r["id"]))
-        key = verdict
+        key = "unreviewed" if picking and verdict == "not_needed" and r["id"] not in approved else verdict
         if (verdict == "other_voice" and sims.get(r["id"], 1.0) < ANNOUNCER_SIM
                 and (r["start"] < INTRO_SECONDS or lengths.get(r["source_id"], 0) - r["end"] < INTRO_SECONDS)):
             key = "announcer"
         if key in seconds:
             seconds[key] += r["end"] - r["start"]
-        shown.setdefault("keep" if verdict in ("keep", "not_needed") else key, []).append(r["id"])
+        shown.setdefault("keep" if key in ("keep", "not_needed") else key, []).append(r["id"])
     db.set_verdicts(updates)
 
     for s in sources:
@@ -301,8 +321,23 @@ def finalize(project_id: str) -> dict:
                      "voices far from the narrator’s usual one.")
     if seconds["duplicate"] >= 3:
         notes.append(f"Skipped {span(seconds['duplicate'])} heard twice: the same audio is in two files.")
+    if picking and len(kept) < 20:
+        notes.append(f"Approve more clips: at least {_minutes(config.READY_USABLE * 60)} for a usable voice.")
+    stored = {u[3]: u[1] for u in updates}  # the final verdicts, as saved
+    listed = [r for r in rows if stored[r["id"]] in PICKABLE]
+    left = [r for r in listed if r.get("pick") == 0]
+    picks = {
+        "on": picking,
+        "approved": len(approved),
+        "approved_minutes": round(sum(r["end"] - r["start"] for r in rows if r["id"] in approved) / 60, 1),
+        "left_out": len(left),
+        "left_out_minutes": round(sum(r["end"] - r["start"] for r in left) / 60, 1),
+        "to_review": sum(1 for r in listed if r.get("pick") is None and stored[r["id"]] in ("keep", "not_needed")),
+        "dropped_rescuable": sum(1 for r in listed if r.get("pick") is None and stored[r["id"]] in RESCUABLE),
+    }
     rng = random.Random(project_id)  # the same examples each time the report is made
     report = {
+        "picks": picks,
         "total_minutes": round(total / 60, 1),
         "heard_minutes": round(heard / 60, 1),
         "usable_minutes": round(usable / 60, 1),

@@ -55,6 +55,15 @@ With HTTPS, nginx passes `/createvoice/` with no upload size limit.
 
    The report gives usable minutes, where every minute went, sound coverage,
    speaker consistency and a rating.
+
+   **Pick the clips** (optional): narrators do character voices, and some
+   slip past the speaker check while some of the narrator's own lines are
+   dropped. The card lists the clips least like the narrator first (or in
+   book order) to play and approve or leave out, by mouse or keyboard
+   (Space plays, A approves, X leaves out).
+   - With **Only use the clips I approve** on, training and its held-out check use only approved clips. Every recording is then listened to, so there's all of it to choose from.
+   - Approving a clip overrides the speaker check, but not music, noise, clipping, credits or a duplicate.
+   - With it off, nothing changes; the picks wait.
 5. **Making it**, with the model picked for the project (a Qwen3-TTS model,
    or Piper):
    - **Cloned** (`lab/clone.py`): a few clean 8–14 s clips are tried as the
