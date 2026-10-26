@@ -251,6 +251,8 @@ function renderMeter(meter, b) {
   const maxWords = Math.max(1, ...chapters.map(size));
   while (meter.children.length > chapters.length) meter.lastChild.remove();
   while (meter.children.length < chapters.length) meter.append(el("span", { class: "bar" }, el("i")));
+  meter.classList.toggle("dense", chapters.length > 60 && chapters.length <= 150);
+  meter.classList.toggle("packed", chapters.length > 150);
   chapters.forEach((c, i) => {
     const bar = meter.children[i];
     const h = 22 + 78 * Math.sqrt(size(c) / maxWords);

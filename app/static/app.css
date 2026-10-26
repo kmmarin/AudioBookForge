@@ -185,11 +185,16 @@ textarea { resize: vertical; line-height: 1.55; }
   gap: 2px;
   height: 30px;
   max-width: 560px;
+  min-width: 0;
+  overflow: hidden;  /* never into the voice and format controls beside it */
 }
+/* Long books (Moby Dick has 138 chapters): thinner gaps, so the bars still fit. */
+.meter.dense { gap: 1px; }
+.meter.packed { gap: 0; }
 .bar {
   position: relative;
   flex: 1 1 0;
-  min-width: 2px;
+  min-width: 0;
   max-width: 18px;
   height: var(--h);
   background: var(--track);
