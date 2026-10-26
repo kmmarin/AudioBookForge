@@ -27,7 +27,7 @@ in Forge's Settings, or set `CLONE_URL=http://<that machine>:8100` and the same
 `CLONE_TOKEN` in Forge's `.env`.
 
 The first use of each model downloads it from Hugging Face. That's about 2 GB
-for 0.6B, 4.5 GB for 1.7B and 7 GB for the picture model.
+for 0.6B and 4.5 GB for 1.7B.
 
 ### On Windows itself (no WSL, no Docker)
 
@@ -85,22 +85,13 @@ On an RX 6800, Qwen3-TTS 1.7B runs at about 3.8x real time in batches of 16, in 
 | `CLONE_DTYPE` | auto | `bfloat16`, `float16` or `float32` |
 | `CLONE_PORT` | 8100 | |
 
-## Pictures (Watch and read)
-
-The same server draws Watch and read's pictures: `POST /api/draw`, with DreamShaper XL Lightning (SDXL, 4 steps, about 7 GB, downloaded on first use).
-- **One model at a time:** drawing shares the GPU's one model slot with the voices.
-- **Voices come first:** while a cloned voice is being spoken (or was in the last minute), drawing answers 503 and Forge asks again later.
-- **On AMD cards:** MIOpen is switched on for drawing (`CLONE_DRAW_MIOPEN`, default on). Pictures are all one size, so its kernel search happens only once.
-
-The drawing settings are adapted from [SeeStory](https://github.com/pgotta/SeeStory) (MIT).
-
 ## Several servers
 
-Forge's **Settings** page lists the clone servers it can use and what each one does: voices, pictures or both. A job goes to the first server that does it and is answering. `CLONE_URL` in `.env` adds one more to that list.
+Forge's **Settings** page lists the clone servers it can use. A job goes to the first one that's answering, so one can stand in for another. `CLONE_URL` in `.env` adds one more to that list.
 
 ## API
 
-The API is described in `app/clone.py`. Reference clips go to `PUT /api/refs/<key>`, where the key is a sha1 of the clip plus its text. `POST /api/speak` returns one WAV per sentence. `POST /api/draw` returns one JPEG picture.
+The API is described in `app/clone.py`. Reference clips go to `PUT /api/refs/<key>`, where the key is a sha1 of the clip plus its text. `POST /api/speak` returns one WAV per sentence.
 
 `clone/test_server.py` checks a running server end to end:
 

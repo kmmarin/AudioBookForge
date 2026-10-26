@@ -52,9 +52,6 @@ x-forge: &forge
     VOICELAB_URL: ${VOICELAB_URL:-}
     CLONE_URL: ${CLONE_URL:-}                # the clone server for cloned voices (docker-compose.clone.yml)
     CLONE_TOKEN: ${CLONE_TOKEN:-}            # blank = SHARE_TOKEN
-    SCENE_WORDS: ${SCENE_WORDS:-75}          # Watch and read: words per picture
-    DRAW_STYLE: ${DRAW_STYLE:-sketch}
-    DRAW_MODEL: ${DRAW_MODEL:-dreamshaper-xl-lightning}
     GPU_SHARE: ${GPU_SHARE:-auto}
     DEV_FAKE_TTS: ${DEV_FAKE_TTS:-false}
 

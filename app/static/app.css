@@ -471,12 +471,9 @@ input[type="range"] { accent-color: var(--signal); width: 100%; }
 .g-list li { grid-template-columns: minmax(0, 1fr) auto; }
 .g-status { margin: 0; color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
 .g-status.bad { color: var(--fault); }
-.g-row-jobs { display: flex; gap: 14px; margin-top: 6px; font-size: 14px; }
-.g-row-jobs label, .g-jobs label { display: inline-flex; align-items: center; gap: 6px; }
 .g-form { margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
 .g-fields { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 10px; }
-.g-jobs { display: flex; gap: 18px; margin: 10px 0; font-size: 14px; }
-.g-actions { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+.g-actions { margin-top: 10px; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
 .g-result { flex: 1; margin: 0; }
 .g-howto { margin: 4px 0 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-s); }
 .g-howto summary { cursor: pointer; font-weight: 600; font-size: 14px; }

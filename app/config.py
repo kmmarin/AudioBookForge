@@ -187,14 +187,6 @@ CLONE_TOKEN = _env("CLONE_TOKEN") or SHARE_TOKEN
 # a time, so two keep it busy (one being made, the next one waiting).
 CLONE_WORKERS = _int("CLONE_WORKERS", 2)
 
-# --- Watch and read (app/scenes.py) ------------------------------------------------
-# Pictures of what's happening, above the text as it's read: one about every
-# SCENE_WORDS words of narration (75 is about 30 seconds), drawn by the clone
-# server (CLONE_URL, /api/draw) in DRAW_STYLE, and kept with the book.
-SCENE_WORDS = _int("SCENE_WORDS", 75)
-DRAW_STYLE = _env("DRAW_STYLE", "sketch")  # sketch, ink, storybook, cinematic, noir, oil
-DRAW_MODEL = _env("DRAW_MODEL", "dreamshaper-xl-lightning")
-
 # --- Narration pacing (seconds) -----------------------------------------------
 # The engines' own silence around speech is trimmed to a 0.27 s margin (0.12 s
 # before speech, 0.15 s after), and these are added on top of it. Totals: a

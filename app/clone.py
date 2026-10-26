@@ -9,8 +9,6 @@ The server's API (JSON; X-Forge-Token when it has a token set):
     GET  /api/refs/<key>        200 if the server has it, else 404
     POST /api/speak             {"model", "ref", "sentences": [...], "language"}
                                 -> {"rate", "audio": [base64 16-bit WAV per sentence]}; 404 = unknown ref
-    POST /api/draw              {"prompt", "negative", "model", "width", "height", "seed"}
-                                -> {"image": base64 JPEG, "width", "height"}; 503 = speaking a voice, ask later
     POST /api/unload            frees the model's video memory
 """
 from __future__ import annotations
@@ -34,10 +32,6 @@ MODELS = {  # what voice.json "model" can say, best first
 
 class CloneError(RuntimeError):
     """The clone server couldn't be reached or couldn't make the audio."""
-
-
-class CloneBusy(CloneError):
-    """The clone server is speaking a voice: ask again later (pictures wait for voices)."""
 
 
 def ref_key(audio: bytes, text: str) -> str:
@@ -98,19 +92,6 @@ class Client:
             wav, _ = sf.read(io.BytesIO(base64.b64decode(item)), dtype="float32", always_2d=False)
             clips.append(wav if wav.ndim == 1 else wav.mean(axis=1))
         return int(out["rate"]), clips
-
-    def draw(self, prompt: str, negative: str = "", model: str = "dreamshaper-xl-lightning",
-             width: int = 1024, height: int = 576, seed: int | None = None) -> bytes:
-        """One picture, as JPEG bytes."""
-        status, out = self._call("POST", "/api/draw", {"prompt": prompt, "negative": negative, "model": model,
-                                                       "width": width, "height": height, "seed": seed})
-        if status == 503:
-            raise CloneBusy(out.get("detail") or "The clone server is busy")
-        if status == 404:
-            raise CloneError("This clone server can’t draw yet: update it (clone/server.py with /api/draw).")
-        if status != 200:
-            raise CloneError(out.get("detail") or f"The clone server answered {status}")
-        return base64.b64decode(out["image"])
 
     def unload(self) -> None:
         self._call("POST", "/api/unload", timeout=30)

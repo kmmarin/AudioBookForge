@@ -61,7 +61,7 @@ if ($LASTEXITCODE -ne 0) {
 # qwen-tts without its own dependency list: it would pull another PyTorch over this one.
 & $py -m pip install -q --no-deps qwen-tts==0.1.1
 & $py -m pip install -q transformers==4.57.3 accelerate==1.12.0 librosa soundfile einops sox onnxruntime `
-    huggingface_hub fastapi==0.162.0 uvicorn==0.54.0 diffusers==0.37.1  # diffusers: Watch and read's pictures
+    huggingface_hub fastapi==0.162.0 uvicorn==0.54.0
 Copy-Item -Force "$PSScriptRoot\..\server.py" "$Root\server\server.py"
 Copy-Item -Force "$PSScriptRoot\start.ps1", "$PSScriptRoot\stop.ps1", "$PSScriptRoot\save-token.ps1", `
   "$PSScriptRoot\install-autostart.ps1" "$Root\server\"

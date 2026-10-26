@@ -28,10 +28,6 @@
       </button>
       <button type="button" class="icon r-tool" id="r-smaller" aria-label="Smaller text" title="Smaller text">A<small>−</small></button>
       <button type="button" class="icon r-tool" id="r-bigger" aria-label="Bigger text" title="Bigger text">A<small>+</small></button>
-      <button type="button" class="icon r-tool" id="r-watch-btn" aria-pressed="false" aria-haspopup="true"
-              aria-label="Watch and read: pictures of the story" title="Watch and read: pictures of the story">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none"/><path d="M4 11l2.8-3.3 2.4 2.3 1.6-1.6 1.7 2.6" fill="none"/><circle cx="10.6" cy="5.8" r="1" stroke="none"/></svg>
-      </button>
       <button type="button" class="icon r-tool" id="r-theme" aria-label="Switch light or dark" title="Switch light or dark">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 0 0 11z" stroke="none"/><circle cx="8" cy="8" r="5.5" fill="none"/></svg>
       </button>
@@ -45,26 +41,6 @@
       </button>
     </div>
   </header>
-
-  <div class="r-sleep-menu r-watch-menu" id="r-watch-menu" role="menu" hidden>
-    <p class="r-menu-title">Pictures of the story</p>
-    <button type="button" role="menuitemradio" data-watch="off">Off</button>
-    <button type="button" role="menuitemradio" data-watch="above">Above the text</button>
-    <button type="button" role="menuitemradio" data-watch="full">Full page, like SeeStory</button>
-    <p class="r-menu-credit">The full page view comes from
-      <a href="https://github.com/pgotta/SeeStory" target="_blank" rel="noopener">SeeStory</a> by pgotta.</p>
-  </div>
-
-  <section class="r-watch paused" id="r-watch" aria-label="Pictures of the story" hidden>
-    <img class="r-watch-img" id="r-watch-a" alt="">
-    <img class="r-watch-img" id="r-watch-b" alt="">
-    <p class="r-watch-caption" id="r-watch-caption" aria-hidden="true"></p>
-    <div class="r-watch-note" id="r-watch-note" hidden>
-      <p id="r-watch-msg"></p>
-      <button type="button" class="primary" id="r-watch-make" hidden>Draw the pictures</button>
-    </div>
-    <p class="r-watch-progress" id="r-watch-progress" role="status" hidden></p>
-  </section>
 
   <div class="r-revoice" id="r-revoice" role="status" hidden>
     <span id="r-revoice-text"></span>

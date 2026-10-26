@@ -72,31 +72,6 @@ model is downloaded at first use from the project that publishes it (see
   is what plays and downloads. A name Whisper misheard can be fixed in the
   text, and the timings follow without listening again.
 
-### Watch and read
-
-Simple hand-drawn pictures of what's happening, changing as the story is read.
-The picture button in Read along's header offers two views:
-- **Above the text:** the picture sits at the top, with the highlighted text
-  below it.
-- **Full page:** SeeStory's view. The picture fills the screen, and the
-  sentence being read runs as a subtitle with its word lit.
-
-How it works:
-- **How scenes are chosen:** about every 75 words (30 seconds) a scene begins
-  at a paragraph's start, and its picture is drawn from the passage's most
-  paintable sentence.
-- **Drawing:** the clone server's GPU draws the pictures, in pencil-and-ink
-  style by default, ahead of time, and they're kept with the book.
-- **Movement:** each picture is swept in as if being drawn, then drifts slowly,
-  pausing with the audio.
-- **Other voices:** the scenes are the same in every voice a book is made in;
-  only their timing follows the voice.
-
-Scene choice, prompts and movement are adapted from
-[SeeStory](https://github.com/pgotta/SeeStory) by pgotta (MIT), which turns
-an audiobook into an illustrated video. See
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
 ### Two machines, if you like
 
 An always-on server (a Proxmox container, a NAS, any Docker host) keeps the
@@ -201,7 +176,7 @@ question blank: the PC then keeps its books itself.
 A card with 16 GB, such as an RTX 4070 Ti Super, runs all of it:
 - Forge on the GPU;
 - the voice creator;
-- the clone server, for cloned voices and Watch and read's pictures.
+- the clone server, for cloned voices.
 
 **What you need:**
 - Windows 11, or Windows 10 22H2, with a recent NVIDIA driver.
@@ -228,7 +203,7 @@ A card with 16 GB, such as an RTX 4070 Ti Super, runs all of it:
   `VOICELAB=false` or `CLONE_LOCAL=false` in `.env`.
 
 The first start downloads several GB. The models for cloned voices (about
-7 GB) and pictures (about 7 GB) download the first time each is used.
+7 GB for both sizes) download the first time each is used.
 
 ---
 
@@ -353,11 +328,10 @@ process to end while it's working can leave the GPU driver stuck until a
 restart.
 
 **Several GPU servers: Settings.** Forge's **Settings** lists every clone
-server, whether each is answering and on which GPU, and the jobs each does:
-voices, pictures, or both. You can add, change, reorder and remove them there.
-- **Who does what:** a job goes to the first server that does it and is
-  answering. So one card can speak the voices while another draws the
-  pictures, and a second machine can stand in when the first is off.
+server, and whether each is answering and on which GPU. You can add, test,
+change, reorder and remove them there.
+- **Who does what:** a job goes to the first server that's answering, so a
+  second machine can stand in when the first is off.
 - **Where it's kept:** the list is stored in `gpu-servers.json` in the models
   volume, shared with the voice creator.
 - **The `.env` server:** one set there (`CLONE_URL`) is listed too.
@@ -406,9 +380,8 @@ The main ones:
 | `METADATA_LOOKUP` | true | Look books up online |
 | `PUBLISH_URL`, `PUBLIC_URL`, `SHARE_TOKEN` | | The server and converter link |
 | `VOICELAB`, `VOICELAB_URL` | true | The voice creator, wherever there's an NVIDIA GPU, or reached on another machine |
-| `CLONE_URL`, `CLONE_TOKEN` | | A clone server for cloned voices and pictures (more in Settings) |
+| `CLONE_URL`, `CLONE_TOKEN` | | A clone server for cloned voices (more in Settings) |
 | `CLONE_LOCAL` | auto | The clone server beside Forge: auto = on an NVIDIA card of 12 GB or more |
-| `SCENE_WORDS`, `DRAW_STYLE` | 75, sketch | Watch and read: words per picture, and the drawing style |
 | `NORMALIZE` | true | Every book at the same loudness (EBU R128) |
 | `INSTALL_CALIBRE` | true | Kindle and other older ebook formats (false: an image about 700 MB smaller) |
 | `DEV_FAKE_TTS` | false | Tones instead of speech: tests the whole pipeline in seconds |

@@ -4,7 +4,6 @@
   --r-measure: 36rem;
   --r-top: 64px;
   --r-bottom: 150px;
-  --r-watch: 0px;  /* Watch and read's picture pane, under the header */
   --read-font: "Literata", Georgia, "Times New Roman", serif;
   --pill: rgb(242 179 42 / 0.26);
   --pill-edge: rgb(242 179 42 / 0.55);
@@ -51,123 +50,9 @@
 /* Text ----------------------------------------------------------------------- */
 .r-main {
   max-width: none;
-  padding: calc(var(--r-top) + var(--r-watch) + 6vh) 20px calc(var(--r-bottom) + 50vh);
+  padding: calc(var(--r-top) + 6vh) 20px calc(var(--r-bottom) + 50vh);
 }
 
-/* Watch and read ------------------------------------------------------------- */
-.reader.watching { --r-watch: min(40vh, 56.25vw); }
-.r-watch {
-  position: fixed;
-  top: var(--r-top);
-  left: 0;
-  right: 0;
-  z-index: 15;
-  height: var(--r-watch);
-  overflow: hidden;
-  background: #f6f1e5;  /* paper: the pictures are ink on paper in either theme */
-  border-bottom: 1px solid var(--line);
-}
-.r-watch-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  transition: opacity 1.1s ease;
-  will-change: transform, opacity;
-}
-.r-watch-img.on { opacity: 1; }
-/* !important: the reader sets each picture's animation inline, which would say "running". */
-.r-watch.paused .r-watch-img { animation-play-state: paused !important; }
-@keyframes r-kb { from { transform: var(--kb-from); } to { transform: var(--kb-to); } }
-/* A picture arrives as if being drawn: swept in from the left. */
-@keyframes r-reveal {
-  from { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
-  to { -webkit-mask-position: 0 0; mask-position: 0 0; }
-}
-.r-watch-img.on {
-  -webkit-mask-image: linear-gradient(100deg, #000 46%, transparent 56%);
-  mask-image: linear-gradient(100deg, #000 46%, transparent 56%);
-  -webkit-mask-size: 260% 100%;
-  mask-size: 260% 100%;
-  -webkit-mask-position: 0 0;
-  mask-position: 0 0;
-}
-.r-watch-note {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 12px;
-  padding: 16px;
-  text-align: center;
-  color: #4a4238;
-  font-size: 15px;
-}
-.r-watch-note p { margin: 0; max-width: 30rem; }
-.r-watch-progress {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  margin: 0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgb(42 37 32 / 0.72);
-  color: #f6f1e5;
-  font-size: 12px;
-}
-/* Full page (SeeStory's view): the picture fills the space between the header and
-   the player, with the sentence being read as a subtitle. */
-.reader.watching-full { --r-watch: calc(100dvh - var(--r-top) - var(--r-player-h, var(--r-bottom))); }
-.reader.watching-full .r-main { visibility: hidden; }
-.r-watch-caption { display: none; }
-.reader.watching-full .r-watch-caption {
-  display: block;
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  margin: 0;
-  padding: 48px max(20px, 8vw) 18px;
-  font-family: var(--read-font);
-  font-size: clamp(18px, 2.3vw, 26px);
-  line-height: 1.45;
-  text-align: center;
-  color: #f6f1e5;
-  background: linear-gradient(transparent, rgb(24 20 16 / 0.85) 45%);
-}
-.r-watch-caption span { border-radius: 4px; transition: background-color 0.12s; }
-.r-watch-caption span.cur { background: rgb(242 179 42 / 0.45); }
-@media (orientation: portrait) {
-  /* A tall screen: the whole picture at the top, the subtitle on the paper below it. */
-  .reader.watching-full .r-watch-img { bottom: auto; height: min(56.25vw, 60%); }
-  .reader.watching-full .r-watch-caption {
-    top: min(56.25vw, 60%);
-    overflow-y: auto;
-    padding: 24px 20px 16px;
-    color: #2a2520;
-    background: none;
-  }
-  .r-watch-caption span.cur { background: rgb(217 149 16 / 0.35); }
-}
-.r-sleep-menu.r-watch-menu {  /* the sleep timer's menu, under the header instead */
-  position: fixed;
-  top: calc(var(--r-top) - 2px);
-  right: 12px;
-  bottom: auto;
-  left: auto;
-  transform: none;
-  z-index: 30;
-}
-.r-watch-menu button[aria-checked="true"] { font-weight: 600; color: var(--signal); }
-.r-watch-menu button[aria-checked="true"]::after { content: " ✓"; }
-.r-menu-credit { margin: 6px 10px 4px; font-size: 12px; color: var(--mute); }
-.r-menu-credit a { color: inherit; }
-#r-watch-btn svg { stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-#r-watch-btn svg circle { fill: currentColor; }
-#r-watch-btn[aria-pressed="true"] { color: var(--signal); }
 .r-status {
   max-width: var(--r-measure);
   margin: 18vh auto 0;
@@ -189,7 +74,7 @@
 .r-status.r-status-bar h2 { font-size: 16px; margin: 0 0 4px; }
 .r-status.r-status-bar p { margin: 0; }
 .r-status.r-status-bar .primary { margin-top: 10px; }
-.reader.text-only #r-watch-btn, .reader.text-only #r-voice-btn,
+.reader.text-only #r-voice-btn,
 .reader.text-only #r-marks, .reader.text-only #r-who-btn { display: none !important; }
 .r-text {
   position: relative;
@@ -491,7 +376,7 @@
 /* Voice change ----------------------------------------------------------- */
 .r-revoice {
   position: fixed;
-  top: calc(var(--r-top) + var(--r-watch));
+  top: var(--r-top);
   left: 0;
   right: 0;
   z-index: 19;
