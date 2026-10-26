@@ -15,7 +15,7 @@ jiwer==3.1.0
 
 # piper1-gpl's training extras (setup.py extras_require["train"]), minus TensorBoard:
 # progress is reported to the web page instead.
-lightning==2.5.6
+lightning==2.6.6
 jsonargparse[signatures]==4.53.0
 pathvalidate==3.3.1
 onnx==1.23.2
