@@ -295,9 +295,14 @@ def health():
     models = []
     for model_id, m in MODELS.items():
         fits, note = model_fits(m)
-        models.append({"id": model_id, "label": m["label"], "hf": m["hf"], "fits": fits, "note": note})
+        need = m["fp32_gb"] if dtype_name() == "float32" else m["bf16_gb"]
+        models.append({"id": model_id, "label": m["label"], "hf": m["hf"], "fits": fits, "note": note,
+                       "need_gb": need if name else None})
+    # Free video memory now (the card may be shared with Forge and the voice creator):
+    # Forge sends a model here only if it fits what's free, or is loaded already.
+    free = round(torch.cuda.mem_get_info(0)[0] / 1024**3, 1) if name else None
     return {"ok": True, "device": "cuda" if name else "cpu", "gpu": name,
-            "gpu_gb": round(total, 1) if total else None, "dtype": dtype_name(),
+            "gpu_gb": round(total, 1) if total else None, "free_gb": free, "dtype": dtype_name(),
             "loaded": engine.model_id, "models": models}
 
 

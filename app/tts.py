@@ -254,7 +254,7 @@ class CloneEngine:
         """The GPU server doing voices, picked again for each request: if one stops
         answering, the next one that does voices carries on (app/gpus.py)."""
         from . import gpus
-        found = gpus.client("voices")
+        found = gpus.client("voices", model=self.model)
         if found is None:
             raise ValueError("No GPU server does voices any more: add one in Settings.")
         return found

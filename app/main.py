@@ -1007,7 +1007,10 @@ def _gpu_url(url: str | None) -> str:
 
 
 def _gpu_list() -> dict:
-    return {"servers": [_gpu_json(s) for s in gpus.servers()], "file": str(gpus.FILE)}
+    gone = set(gpus.hidden())
+    return {"servers": [_gpu_json(s) for s in gpus.servers()], "file": str(gpus.FILE),
+            "hidden": [{"url": s["url"], "source": s["source"]} for s in gpus.extras(with_hidden=True)
+                       if s["url"] in gone]}
 
 
 @app.get("/api/gpu-servers")
@@ -1028,12 +1031,31 @@ def add_gpu_server(body: GpuServerBody):
 
 
 def _settings_server(servers: list[dict], server_id: str) -> dict:
+    """A server on the Settings page. The one from .env (CLONE_URL) or this
+    machine's fallback is taken over first: copied into the list, with its
+    address and token, and hidden as itself, so it can be changed here."""
     found = next((s for s in servers if s["id"] == server_id), None)
+    if found is None and server_id in ("env", "local"):
+        extra = next((s for s in gpus.extras() if s["id"] == server_id), None)
+        if extra is not None:
+            found = {"id": gpus.new_id(), "url": extra["url"], "token": extra["token"], "voices": True,
+                     "name": "This machine" if server_id == "local" else urlparse(extra["url"]).hostname}
+            servers.append(found)
+            gpus.save(servers, hide=gpus.hidden() + [extra["url"]])
     if found is None:
-        raise HTTPException(404 if server_id != "env" else 400,
-                            "That server is set in .env (CLONE_URL): change it there, or add it here instead."
-                            if server_id == "env" else "No such server.")
+        raise HTTPException(404, "No such server.")
     return found
+
+
+class GpuShowBody(BaseModel):
+    url: str
+
+
+@app.post("/api/gpu-servers/show")
+def show_gpu_server(body: GpuShowBody):
+    """List a server from .env or this machine's fallback again, after it was removed here."""
+    gpus.save(gpus.load(), hide=[u for u in gpus.hidden() if u != body.url.strip().rstrip("/")])
+    return _gpu_list()
 
 
 @app.patch("/api/gpu-servers/{server_id}")
@@ -1053,6 +1075,10 @@ def change_gpu_server(server_id: str, body: GpuServerBody):
 @app.delete("/api/gpu-servers/{server_id}")
 def remove_gpu_server(server_id: str):
     servers = gpus.load()
+    extra = next((s for s in gpus.extras() if s["id"] == server_id), None)
+    if extra is not None:  # from .env or this machine: hidden here; .env stays as it is
+        gpus.save(servers, hide=gpus.hidden() + [extra["url"]])
+        return _gpu_list()
     s = _settings_server(servers, server_id)
     gpus.save([x for x in servers if x is not s])
     return _gpu_list()

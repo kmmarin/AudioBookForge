@@ -42,26 +42,41 @@ def configured() -> bool:
     return gpus.has("voices") or bool(config.CLONE_URL)
 
 
-def client() -> Client:
-    """The GPU server doing voices: the first in Settings that answers."""
+def client(model: str | None = None) -> Client:
+    """The GPU server doing voices: the first in Settings that answers and, for
+    a model, can run it now; this machine's own clone server when it's the one
+    (app/gpus.py)."""
     from app import gpus
-    server = gpus.pick("voices")
+    server = gpus.pick("voices", model)
     if server is None:
         return Client(config.CLONE_URL, config.CLONE_TOKEN)
     return Client(server["url"], server.get("token") or "")
 
 
 def health(max_age: float = HEALTH_SECONDS) -> dict | None:
-    """The clone server's state (which models fit its GPU), cached briefly.
-    None without a clone server; {"ok": False, "error"} when it isn't answering."""
+    """What the voice servers can run, together (cached briefly): a model fits
+    when any server that answers fits it. None without a clone server;
+    {"ok": False, "error"} when none is answering."""
     global _health
+    from app import gpus
     if not configured():
         return None
     if _health is None or time.monotonic() - _health[0] > max_age:
-        try:
-            state = client().health(timeout=5)
-        except CloneError as exc:
-            state = {"ok": False, "error": str(exc)}
+        answering = [h for h in (gpus.health(s, max_age) for s in gpus.servers() if s.get("voices")) if h.get("ok")]
+        if not answering and config.CLONE_URL and not gpus.has("voices"):
+            try:  # a voice creator set up with CLONE_URL alone
+                answering = [client().health(timeout=5)]
+            except CloneError:
+                pass
+        if answering:
+            models: dict[str, dict] = {}
+            for h in answering:  # the first server that fits a model speaks for it
+                for m in h.get("models") or []:
+                    if m["id"] not in models or (m.get("fits") and not models[m["id"]].get("fits")):
+                        models[m["id"]] = m
+            state = {**answering[0], "ok": True, "models": list(models.values())}
+        else:
+            state = {"ok": False, "error": "The clone server isn’t answering."}
         _health = (time.monotonic(), state)
     return _health[1]
 
@@ -228,7 +243,7 @@ def main(project_id: str) -> int:
                 ref.parent.mkdir(parents=True, exist_ok=True)
                 media.write_wav(ref, media.decode(paths[c["source_id"]], c["start"], c["end"] - c["start"],
                                                   rate=config.CLONE_RATE), config.CLONE_RATE)
-            rate, (audio,) = client().speak(model, ref, c["text"].strip(), [voices.SAMPLE_TEXT])
+            rate, (audio,) = client(model).speak(model, ref, c["text"].strip(), [voices.SAMPLE_TEXT])
             out = sample_path(project_id, model, c["id"])
             out.parent.mkdir(parents=True, exist_ok=True)
             media.write_wav(out, audio, rate)

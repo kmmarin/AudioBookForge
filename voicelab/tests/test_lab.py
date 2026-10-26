@@ -156,6 +156,126 @@ class TestReadiness(unittest.TestCase):
         self.assertIn("reach Great", tips[0])
 
 
+class TestPicking(unittest.TestCase):
+    """The owner approves or leaves out clips (clips.pick, projects.picking)."""
+
+    def setUp(self):
+        import uuid
+
+        import numpy as np
+        from lab import db, speaker
+        db.init()
+        self.db = db
+        self.pid, self.sid = uuid.uuid4().hex[:12], uuid.uuid4().hex[:12]
+        db.create_project(self.pid, "en-us")
+        db.create_source(self.sid, self.pid, "Book-Part01.mp3", "/nowhere.mp3", 0)
+        db.update_source(self.sid, status="done", duration=3600.0, done_until=3600.0)
+        rng = np.random.default_rng(7)
+        unit = lambda v: v / np.linalg.norm(v)
+        narrator = unit(rng.normal(size=192))
+        clips = []
+        for n in range(66):  # 60 in the narrator's voice, then 6 others; all mid-file, whole sentences
+            other = n >= 60
+            emb = unit(rng.normal(size=192)) if other else unit(narrator + 0.15 * unit(rng.normal(size=192)))
+            clips.append({"start": 300.0 + n * 20, "end": 304.0 + n * 20, "words": 7, "conf": 0.95, "unsure": 0.0,
+                          "snr": 40.0, "clipped": 0.0, "reason": None, "embedding": speaker.to_blob(emb),
+                          "text": f"The road ran on west for mile {n} today."})
+        clips += [{**clips[0], "start": 1800.0 + n * 20, "end": 1804.0 + n * 20, "reason": "noisy",
+                   "text": f"A noisy line number {n} here."} for n in range(2)]
+        db.add_clips(self.pid, self.sid, clips, 3600.0, 3600.0, {})
+        rows = sorted(db.clips(self.pid), key=lambda r: r["start"])
+        self.narrator = [r["id"] for r in rows if r["reason"] is None][:60]
+        self.others = [r["id"] for r in rows if r["reason"] is None][60:]
+        self.noisy = [r["id"] for r in rows if r["reason"]]
+
+    def fates(self):
+        readiness.finalize(self.pid)
+        return {r["id"]: (r["verdict"], r["role"]) for r in self.db.clips(self.pid)}
+
+    def picking(self, on=True):
+        self.db.update_project(self.pid, picking=int(on))
+
+    def test_off_is_as_before(self):
+        before = self.fates()
+        self.db.set_picks(self.pid, {self.narrator[0]: 0, self.others[0]: 1})
+        self.assertEqual(self.fates(), before)
+        self.assertTrue(all(before[i][0] == "other_voice" for i in self.others))
+
+    def test_left_out_never_trains_or_checks(self):
+        self.picking()
+        self.db.set_picks(self.pid, {**{i: 1 for i in self.narrator[3:]}, **{i: 0 for i in self.narrator[:3]}})
+        fates = self.fates()
+        for i in self.narrator[:3]:
+            self.assertEqual(fates[i], ("left_out", None))
+
+    def test_approved_other_voice_is_kept_but_hard_reason_stays(self):
+        self.picking()
+        self.db.set_picks(self.pid, {**{i: 1 for i in self.narrator}, self.others[0]: 1, self.noisy[0]: 1})
+        fates = self.fates()
+        self.assertEqual(fates[self.others[0]][0], "keep")
+        self.assertIn(fates[self.others[0]][1], ("train", "holdout"))
+        self.assertEqual(fates[self.noisy[0]], ("noisy", None))
+
+    def test_only_approved_clips_train_and_check(self):
+        self.picking()
+        approved = set(self.narrator[:40])
+        self.db.set_picks(self.pid, {i: 1 for i in approved})
+        fates = self.fates()
+        used = {i for i, (_v, role) in fates.items() if role}
+        self.assertTrue(used and used <= approved)
+        self.assertTrue(any(role == "holdout" for _v, role in fates.values()))
+        self.assertTrue(all(fates[i][0] == "not_needed" for i in self.narrator[40:]))
+
+    def test_leaving_out_a_held_out_clip_replaces_it(self):
+        self.picking()
+        self.db.set_picks(self.pid, {i: 1 for i in self.narrator})
+        held = [i for i, (_v, role) in self.fates().items() if role == "holdout"]
+        self.db.set_picks(self.pid, {held[0]: 0})
+        fates = self.fates()
+        now = [i for i, (_v, role) in fates.items() if role == "holdout"]
+        self.assertEqual(len(now), len(held))
+        self.assertNotIn(held[0], now)
+        self.assertEqual(fates[held[0]], ("left_out", None))
+
+    def test_report_counts(self):
+        self.picking()
+        self.db.set_picks(self.pid, {self.narrator[0]: 1, self.narrator[1]: 0})
+        picks = readiness.finalize(self.pid)["picks"]
+        self.assertEqual((picks["on"], picks["approved"], picks["left_out"], picks["dropped_rescuable"]), (True, 1, 1, 6))
+        self.assertEqual(picks["to_review"], 58)
+
+    def test_picks_api(self):
+        from fastapi import HTTPException
+        from lab import main
+        self.picking()
+        readiness.finalize(self.pid)
+        page = main.list_picks(self.pid, filter="all", sort="likeness", page=1, size=10)
+        self.assertEqual(page["total"], 66)  # never the noisy ones
+        self.assertEqual({x["id"] for x in page["items"][:6]}, set(self.others))  # least like the narrator first
+        self.assertEqual(page["counts"], {"review": 60, "approved": 0, "left_out": 0, "dropped": 6, "all": 66})
+        self.assertEqual(len(main.list_picks(self.pid, filter="review", page=7, size=10)["items"]), 0)
+        res = main.save_picks(self.pid, main.PicksBody(picks={str(self.others[0]): 1, str(self.narrator[0]): 0}))
+        self.assertEqual((res["counts"]["approved"], res["counts"]["left_out"], res["counts"]["dropped"]), (1, 1, 5))
+        with self.assertRaises(HTTPException) as hard:
+            main.save_picks(self.pid, main.PicksBody(picks={str(self.noisy[0]): 1}))
+        self.assertEqual(hard.exception.status_code, 409)
+        other = TestPicking("test_picks_api")
+        other.setUp()
+        with self.assertRaises(HTTPException) as foreign:
+            main.save_picks(self.pid, main.PicksBody(picks={str(other.narrator[0]): 1}))
+        self.assertEqual(foreign.exception.status_code, 404)
+
+    def test_listening_hears_everything(self):
+        from lab import jobs
+        self.db.update_source(self.sid, gaps={"skipped": 1000.0})
+        self.picking()
+        self.assertFalse(jobs.heard_enough(self.pid))
+        self.assertEqual(jobs.hear_everything(self.pid), 1)
+        s = self.db.get_source(self.sid)
+        self.assertEqual((s["status"], s["done_until"], s["gaps"]), ("queued", 2600.0, {}))
+        self.assertTrue(self.db.job_waiting(self.pid, "analyze"))
+
+
 class TestLease(unittest.TestCase):
     """The voice creator's side, against a simulated Forge that steps aside."""
 

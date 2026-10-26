@@ -47,6 +47,7 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 
 **Making voices** (the voice creator)
 - Recordings heard, cleaned and checked: speech, music, noise and other speakers are told apart, with a readiness report.
+- **Pick the clips:** listen and approve the narrator's own clips; training and its quality check can use only those.
 - Trained Piper voices: likeness and distortion measured every 1,500 steps, and samples along the way to pick by ear.
 - Cloned voices (Qwen3-TTS): a few clips tried as the reference, a sample each, picked by ear.
 - **Learn from the cloned voice:** Piper trained on a cloned voice's clean audio.

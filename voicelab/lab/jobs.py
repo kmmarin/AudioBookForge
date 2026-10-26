@@ -241,8 +241,12 @@ def heard_enough(project_id: str) -> bool:
     """A whole audiobook is far more than training uses (the best TRAIN_MAX_MINUTES):
     once the clean clips heard so far comfortably cover that, the rest is
     skipped instead of spending hours of GPU time listening to it. A cloned
-    voice needs only a few clean clips to pick from: LISTEN_CLONE_MINUTES."""
+    voice needs only a few clean clips to pick from: LISTEN_CLONE_MINUTES. When
+    the owner picks the clips, everything is heard, so there's all of it to pick
+    from (ANALYZE_ENOUGH_MINUTES still caps it)."""
     from . import clone
+    if db.get_project(project_id).get("picking"):
+        return False
     clean = db.conn().execute("SELECT COALESCE(SUM(end - start), 0) FROM clips WHERE project_id = ? AND reason IS NULL",
                               (project_id,)).fetchone()[0] / 60
     enough = config.LISTEN_ENOUGH_MINUTES
@@ -261,6 +265,27 @@ def heard_enough(project_id: str) -> bool:
                              message="Not needed: enough clean speech was heard already")
     log.info("%s: %.0f clean minutes heard, plenty; skipping the other %.0f minutes", project_id, clean, skipped / 60)
     return True
+
+
+def hear_everything(project_id: str) -> int:
+    """Picking the clips: the parts of recordings skipped as "plenty already" or
+    left unheard are heard after all. Each goes back to where listening stopped
+    (a skipped rest counts as heard to the end, so it's taken back off). Returns
+    how many recordings were queued again."""
+    requeued = 0
+    for s in db.sources(project_id):
+        gaps = dict(s["gaps"] or {})
+        if s["status"] != "done" or (gaps.get("skipped", 0) or 0) + (gaps.get("unheard", 0) or 0) < 1:
+            continue
+        skipped, unheard = float(gaps.pop("skipped", 0) or 0), float(gaps.pop("unheard", 0) or 0)
+        duration = float(s["duration"] or 0)
+        resume = max(0.0, min(float(s["done_until"] or 0), duration - skipped - unheard))
+        db.update_source(s["id"], status="queued", done_until=resume, gaps=gaps, message="Waiting to be heard")
+        requeued += 1
+    if requeued:
+        db.add_job(project_id, "analyze")
+        log.info("%s: picking the clips, so %d recording(s) are heard to the end", project_id, requeued)
+    return requeued
 
 
 def finish_analysis(project_id: str) -> None:

@@ -114,25 +114,37 @@ if $GPU; then
     mkdir -p voicelab-data
     echo "Voice creator: on (Create a voice, at the top of Forge's page)"
   fi
-  # The clone server (cloned voices) on this GPU too:
-  # Forge and the voice creator reach it by name, and it takes a smaller share of
-  # the card, which it now shares with them. CLONE_LOCAL=auto (the default): on a
-  # card with 12 GB or more.
+  # The clone server (cloned voices) on this GPU too: Forge and the voice creator
+  # reach it by name. CLONE_LOCAL=auto (the default): on a card of 12 GB or more
+  # it's the clone server, with a smaller share of the card it shares with them;
+  # on one of 6 GB it's the fallback, used when the GPU servers in Settings aren't
+  # answering and the model fits what's free (app/gpus.py).
   clone_local=$(sed -n 's/^CLONE_LOCAL=//p' .env | tail -n1)
+  mib=$( (/usr/lib/wsl/lib/nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null ||
+          nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits) | head -n1 | tr -dc 0-9)
   if [[ ${clone_local:-auto} == auto ]]; then
-    mib=$( (/usr/lib/wsl/lib/nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null ||
-            nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits) | head -n1 | tr -dc 0-9)
-    clone_local=$([[ ${mib:-0} -ge 11500 ]] && echo true || echo false)
+    clone_local=$([[ ${mib:-0} -ge 5500 ]] && echo true || echo false)
   fi
   if [[ $clone_local == true ]]; then
     files+=(-f docker-compose.clone.yml)
     services+=(clone)
-    grep -qE '^CLONE_URL=.+' .env || set_env CLONE_URL http://clone:8100
-    # Its port is open to other machines too (another Forge may use this card): never without a token.
-    grep -qE '^CLONE_TOKEN=.+' .env || set_env CLONE_TOKEN "$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-    grep -qE '^CLONE_GPU_SHARE=.+' .env || set_env CLONE_GPU_SHARE 0.6
-    grep -qE '^CLONE_BATCH=.+' .env || set_env CLONE_BATCH 8
-    echo "Clone server: on, on this GPU (cloned voices)"
+    # Its port is open to other machines too (another Forge may use this card): never without a
+    # token. A blank one becomes SHARE_TOKEN's, which a GPU server elsewhere may already expect.
+    if ! grep -qE '^CLONE_TOKEN=.+' .env; then
+      share=$(sed -n 's/^SHARE_TOKEN=//p' .env | tail -n1)
+      set_env CLONE_TOKEN "${share:-$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
+    fi
+    if ! grep -qE '^CLONE_URL=.+' .env || grep -qE '^CLONE_URL=http://clone:8100/?$' .env; then
+      set_env CLONE_URL http://clone:8100
+      set_env CLONE_LOCAL_URL ""
+    else
+      set_env CLONE_LOCAL_URL http://clone:8100  # a GPU server elsewhere comes first; this card stands in
+    fi
+    if [[ ${mib:-0} -ge 11500 ]]; then
+      grep -qE '^CLONE_GPU_SHARE=.+' .env || set_env CLONE_GPU_SHARE 0.6
+      grep -qE '^CLONE_BATCH=.+' .env || set_env CLONE_BATCH 8
+    fi
+    echo "Clone server: on, on this GPU (cloned voices$([[ ${mib:-0} -lt 11500 ]] && echo ", when the model fits"))"
   fi
 fi
 # HTTPS stays on once ./https-setup.sh has set it up (a name and DNS credentials).
