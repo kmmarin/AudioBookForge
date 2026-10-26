@@ -39,11 +39,12 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 - Playback speed with − and +, and the time left shown at that speed.
 - Audiobooks you already have: Whisper writes down their text with word timings, they're imported into the library as they are, and audiobooks in parts are combined into one M4B.
 
-**Two machines**
-- An always-on server plus a GPU converter.
+**Several machines**
+- An always-on server plus any number of GPU PCs, each sending its books to it.
 - Books sent over automatically.
-- A voice change asked for on the server is voiced on the converter, with live progress.
-- **Voice it here instead** when the converter is off.
+- A voice change asked for on the server is voiced on the PC that made the book, with live progress.
+- **Voice it here instead** when that PC is off.
+- Each PC's voices are copied to the server; a PC only removes the ones it sent.
 
 **Making voices** (the voice creator)
 - Recordings heard, cleaned and checked: speech, music, noise and other speakers are told apart, with a readiness report.

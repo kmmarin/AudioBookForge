@@ -26,7 +26,7 @@ model is downloaded at first use from the project that publishes it (see
 
 - [Features](#features)
 - [Quick start](#quick-start)
-- [A server plus a Windows converter](#a-server-plus-a-windows-converter)
+- [A server plus GPU PCs](#a-server-plus-gpu-pcs)
 - [Making voices](#making-voices)
 - [Cloned voices: the clone server](#cloned-voices-the-clone-server)
 - [HTTPS](#https)
@@ -72,16 +72,22 @@ model is downloaded at first use from the project that publishes it (see
   is what plays and downloads. A name Whisper misheard can be fixed in the
   text, and the timings follow without listening again.
 
-### Two machines, if you like
+### Several machines
 
-An always-on server (a Proxmox container, a NAS, any Docker host) keeps the
-library and serves Read along. A Windows PC with a GPU voices books and sends
-them over:
-- A voice change asked for on the server is voiced on the PC, with progress
-  shown on the server.
-- If the PC is off, **Voice it here instead** does it on the server's CPU.
+Forge runs on one machine or spreads across several:
+- **One always-on server** (a Proxmox container, a NAS, any Docker host) keeps
+  the library and serves Read along to every device.
+- **Any number of PCs with GPUs** voice books and send them to it. Each book
+  remembers which PC made it, so a voice change asked for on the server goes
+  back to that PC, with its progress shown on the server. If that PC is off,
+  **Voice it here instead** does it on the server's CPU.
+- **Any number of GPU servers** speak cloned voices for all of them (Settings →
+  GPU servers). Every card in each one works at once, each benchmarked for how
+  much it can take.
+- **Voices** made on any PC are copied to the server, and each PC looks after
+  only its own.
 
-Setting this up: [A server plus a Windows converter](#a-server-plus-a-windows-converter).
+Setting this up: [A server plus GPU PCs](#a-server-plus-gpu-pcs).
 
 ### Your own voices (optional)
 
@@ -207,19 +213,20 @@ The first start downloads several GB. The models for cloned voices (about
 
 ---
 
-## A server plus a Windows converter
+## A server plus GPU PCs
 
 This is the setup the app was built around:
 - **The server** runs all the time and is light: it keeps the library, serves
   Read along to every device, and remembers each listener's place.
-- **The converter**, a Windows PC with an NVIDIA GPU, voices books many times
-  faster and runs the voice creator.
+- **One or more PCs with NVIDIA GPUs** (converters) voice books many times
+  faster and run the voice creator. Set each one up the same way; they all send
+  to the same server, with the same `SHARE_TOKEN`.
 
 **1. The server.** Install it with `install.sh` or `proxmox-deploy.sh` (above). In its `.env`:
 
 ```ini
-SHARE_TOKEN=<a long random secret, the same on both machines>
-# optional: open the PC's voice creator from the server too
+SHARE_TOKEN=<a long random secret, the same on every machine>
+# optional: open one PC's voice creator from the server too
 VOICELAB_URL=http://<PC address>:8080
 # optional: cloned voices (see below)
 CLONE_URL=http://<clone server>:8100
@@ -227,7 +234,7 @@ CLONE_URL=http://<clone server>:8100
 
 Then restart it: `docker compose up -d`.
 
-**2. The converter.** On the Windows PC, in an admin PowerShell, in the project folder:
+**2. Each PC.** On each Windows PC, in an admin PowerShell, in the project folder:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\windows-converter.ps1 -OpenPort
@@ -235,30 +242,32 @@ powershell -ExecutionPolicy Bypass -File deploy\windows-converter.ps1 -OpenPort
 
 It asks:
 - **The server's address**, like `http://192.168.1.10:8080`.
-- **Its `SHARE_TOKEN`.** Leave it blank and the script makes one, which you
-  then copy to the server.
-- **Whether to train voices on this PC.**
+- **Its `SHARE_TOKEN`.** Leave it blank on the first PC and the script makes
+  one, which you then copy to the server and give to the other PCs.
 
-`-OpenPort` adds a Windows port proxy and firewall rule so the server can
-reach the PC. Give the PC a fixed address (a DHCP reservation). Run the script
-again to update; your books, `.env` and models are kept.
+The voice creator and, on a card of 6 GB or more, a clone server come with it
+(everything is on by default). `-OpenPort` adds a Windows port proxy and
+firewall rule so the server can reach the PC. Give each PC a fixed address (a
+DHCP reservation). Run the script again to update; your books, `.env` and
+models are kept.
 
 **3. Using it.**
-- Books you finish on the PC go to the server by themselves (`PUBLISH_AUTO`),
+- Books finished on a PC go to the server by themselves (`PUBLISH_AUTO`),
   or when you choose **Send to server**. They arrive with chapters, cover,
   text and the Read along map.
-- On the server, changing a book's voice sends the work back to the PC, and
-  the book's row shows the PC's progress.
-- Your voices are copied to the server, so they can be picked there too.
+- On the server, changing a book's voice sends the work back to the PC that
+  made it, and the book's row shows that PC's progress.
+- Each PC's voices are copied to the server, so they can be picked there too.
+  A PC only ever replaces or removes the voices it sent.
 
-No Windows? The converter can be any Linux machine with an NVIDIA GPU. Set
+No Windows? A PC can be any Linux machine with an NVIDIA GPU. Set
 `PUBLISH_URL`, `PUBLIC_URL` and `SHARE_TOKEN` in its `.env` by hand.
 
 ---
 
 ## Making voices
 
-The voice creator is on wherever there's an NVIDIA GPU (the converter):
+The voice creator is on wherever there's an NVIDIA GPU (each GPU PC):
 `windows-converter.ps1`, `wsl-deploy.sh` and `install.sh` add it there, and
 leave it out on machines without one. Forge's header then shows
 **Create a voice**.
