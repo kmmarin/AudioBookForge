@@ -51,6 +51,7 @@ services:
       # CLONE_TOKEN defaults to SHARE_TOKEN.
       CLONE_URL: ${CLONE_URL:-}
       CLONE_TOKEN: ${CLONE_TOKEN:-}
+      CLONE_LOCAL_URL: ${CLONE_LOCAL_URL:-}  # this machine's clone server as a fallback
       SHARE_TOKEN: ${SHARE_TOKEN:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/createvoice/api/health', timeout=3)"]

@@ -52,6 +52,7 @@ x-forge: &forge
     VOICELAB_URL: ${VOICELAB_URL:-}
     CLONE_URL: ${CLONE_URL:-}                # the clone server for cloned voices (docker-compose.clone.yml)
     CLONE_TOKEN: ${CLONE_TOKEN:-}            # blank = SHARE_TOKEN
+    CLONE_LOCAL_URL: ${CLONE_LOCAL_URL:-}    # this machine's clone server as a fallback (installers set it)
     GPU_SHARE: ${GPU_SHARE:-auto}
     DEV_FAKE_TTS: ${DEV_FAKE_TTS:-false}
 

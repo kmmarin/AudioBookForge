@@ -215,7 +215,7 @@ def _clone_sample(slug: str) -> Path:
     out = folder / f"sample-{data['model']}.wav"
     if out.exists() and out.stat().st_mtime >= ref.stat().st_mtime:
         return out
-    rate, (audio,) = client().speak(
+    rate, (audio,) = client(data["model"]).speak(
         data["model"], ref, (folder / "ref.txt").read_text(encoding="utf-8"), [SAMPLE_TEXT],
         language=data.get("language") or "English")
     media.write_wav(out, audio, rate)

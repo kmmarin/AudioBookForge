@@ -1292,30 +1292,31 @@ function gpuStatus(s) {
   return { text: parts.join(" · "), bad: !h.voices.length };
 }
 
+// Where a server comes from: added here, CLONE_URL in .env, or this machine's own card as the fallback.
+const GPU_FROM = { env: "from .env (CLONE_URL)", local: "this machine’s own card: used when the others aren’t answering and the voice fits it" };
+
 function gpuRow(s, n, count) {
-  const env = s.source === "env";
   const li = el("li", {});
   const st = gpuStatus(s);
   const head = el("p", { class: "w-name", textContent: `${s.name || s.url}${n === 0 && count > 1 ? " (tried first)" : ""}` });
-  const where = el("p", { class: "g-status", textContent: `${s.url}${env ? " · set in .env (CLONE_URL): change it there" : s.has_token ? "" : " · no token"}` });
+  const where = el("p", { class: "g-status", textContent: [s.url, GPU_FROM[s.source], s.has_token ? null : "no token"].filter(Boolean).join(" · ") });
   const status = el("p", { class: `g-status${st.bad ? " bad" : ""}`, textContent: st.text });
   const test = el("button", { type: "button", class: "quiet", textContent: "Test" });
   test.addEventListener("click", () => testGpu({ url: s.url }, status));
   const buttons = [test];
-  if (!env) {
-    if (n > 0) {
-      const first = el("button", { type: "button", class: "quiet", textContent: "Try first" });
-      first.addEventListener("click", () => gpuCall(`/api/gpu-servers/${s.id}/first`, { method: "POST" }));
-      buttons.push(first);
-    }
-    const edit = el("button", { type: "button", class: "quiet", textContent: "Edit" });
-    edit.addEventListener("click", () => li.replaceWith(gpuEditRow(s, n, count)));
-    const remove = el("button", { type: "button", class: "quiet danger", textContent: "Remove" });
-    remove.addEventListener("click", () => {
-      if (confirm(`Remove ${s.name || s.url}? Cloned voices go to the other servers.`)) gpuCall(`/api/gpu-servers/${s.id}`, { method: "DELETE" });
-    });
-    buttons.push(edit, remove);
+  if (n > 0) {
+    const first = el("button", { type: "button", class: "quiet", textContent: "Try first" });
+    first.addEventListener("click", () => gpuCall(`/api/gpu-servers/${s.id}/first`, { method: "POST" }));
+    buttons.push(first);
   }
+  const edit = el("button", { type: "button", class: "quiet", textContent: "Edit" });
+  edit.addEventListener("click", () => li.replaceWith(gpuEditRow(s, n, count)));
+  const remove = el("button", { type: "button", class: "quiet danger", textContent: "Remove" });
+  remove.addEventListener("click", () => {
+    const note = s.source === "settings" ? "" : " It comes back with Show it again, below.";
+    if (confirm(`Remove ${s.name || s.url}? Cloned voices go to the other servers.${note}`)) gpuCall(`/api/gpu-servers/${s.id}`, { method: "DELETE" });
+  });
+  buttons.push(edit, remove);
   li.append(el("div", { class: "w-who" }, head, where, status), el("div", { class: "w-actions" }, ...buttons));
   return li;
 }
@@ -1323,7 +1324,9 @@ function gpuRow(s, n, count) {
 // A server changed in its own row: Save is there only once something differs.
 function gpuEditRow(s, n, count) {
   const li = el("li", { class: "g-editing" });
-  const name = el("input", { value: s.name, maxLength: 60, "aria-label": "Name" });
+  // One from .env or this machine becomes a server of this page once saved.
+  const startName = s.source === "env" ? new URL(s.url).hostname : s.name;
+  const name = el("input", { value: startName, maxLength: 60, "aria-label": "Name" });
   const url = el("input", { value: s.url, "aria-label": "Address" });
   const token = el("input", { type: "password", autocomplete: "new-password", "aria-label": "Token",
     placeholder: s.has_token ? "Blank keeps the saved token" : "Its token" });
@@ -1331,6 +1334,7 @@ function gpuEditRow(s, n, count) {
   const save = el("button", { type: "button", class: "primary", textContent: "Save", disabled: true });
   const changed = () => {
     save.disabled = !(name.value.trim() !== s.name || url.value.trim() !== s.url || token.value.trim());
+    if (s.source === "env") save.disabled = !(url.value.trim() !== s.url || token.value.trim() || name.value.trim() !== startName);
   };
   for (const input of [name, url, token]) input.addEventListener("input", changed);
   const fields = () => ({ name: name.value, url: url.value, ...(token.value.trim() ? { token: token.value } : {}) });
@@ -1359,7 +1363,13 @@ function renderGpus(data) {
   $("#g-list").replaceChildren(...data.servers.map((s, n) => gpuRow(s, n, data.servers.length)));
   if (!data.servers.length) $("#g-list").append(el("li", {}, el("p", { class: "g-status", textContent: "None yet. Cloned voices need one." })));
   if (!data.servers.length) $("#g-howto").open = true;  // nothing set up yet: show how
-  $("#g-where").textContent = `This list is kept in ${data.file} on the server, shared with the voice creator. A server set in .env (CLONE_URL) is listed too.`;
+  const where = $("#g-where");
+  where.replaceChildren(`This list is kept in ${data.file} on the server, shared with the voice creator.`);
+  for (const h of data.hidden || []) {  // removed here, still in .env
+    const back = el("button", { type: "button", class: "quiet small", textContent: "Show it again" });
+    back.addEventListener("click", () => gpuCall("/api/gpu-servers/show", { method: "POST", json: { url: h.url } }));
+    where.append(el("span", { class: "g-hidden" }, ` Removed here: ${h.url} (${h.source === "env" ? "from .env" : "this machine"}). `, back));
+  }
 }
 
 async function gpuCall(path, opts) {

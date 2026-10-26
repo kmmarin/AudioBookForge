@@ -73,7 +73,7 @@ def speak(rows: list[dict], out_dir: Path, teacher: dict, report=None) -> list[d
     written. report(done, total) after each request."""
     from .clone import client as clone_client
     out_dir.mkdir(parents=True, exist_ok=True)
-    client = clone_client()
+    client = clone_client(teacher["model"])
 
     def done(r: dict) -> bool:
         return (out_dir / f"c{r['id']}.wav").exists() or (out_dir / f"c{r['id']}.skip").exists()
