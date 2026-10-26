@@ -472,6 +472,11 @@ python -m unittest discover -s voicelab/tests
 PYTHONPATH=. python clone/test_server.py http://host:8100 ref.wav ref.txt TOKEN out/
 ```
 
+**Branches:**
+- `main` is the stable version: install from it.
+- `next` collects changes as they're made, with an open pull request into
+  `main`. They reach `main` when it's merged.
+
 There's no frontend build step: the UI is plain HTML, CSS and JavaScript in
 `app/static/` and `voicelab/lab/static/`. Every setting is an environment
 variable read in one `config.py`. [docs/DEVELOPING.md](docs/DEVELOPING.md)
