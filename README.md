@@ -14,6 +14,8 @@ Windows PC with a GPU that does the heavy lifting.
   Qwen3-TTS, or train a Piper voice that needs no GPU to read a book. You
   listen to samples and pick one by ear.
 
+What's done, in progress and planned: [ROADMAP.md](ROADMAP.md).
+
 Nothing in this repository is a book, a recording or a voice. Every voice
 model is downloaded at first use from the project that publishes it (see
 [Voices and models](#voices-and-models)).
