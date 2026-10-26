@@ -223,6 +223,15 @@
 .pk-like.low i { background: var(--fault); }
 .pk-like b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: 0.5; }
 .pk-use { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }
+.pk-acts { display: inline-flex; align-items: center; gap: 8px; }
+.pk-ref { width: 30px; height: 30px; font-size: 16px; color: var(--mute); }
+.pk-ref[aria-pressed="true"] { color: var(--signal); border-color: var(--signal); }
+.pk-like.close i { background: var(--done); }
+.pk-meta[data-match="close"] { color: var(--done); }
+.pk-meta[data-match="unlike"] { color: var(--fault); }
+.pick-match { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-top: 4px; }
+.pick-match .status-line { margin: 0; }
+.pick-recut { margin: 8px 0 0; font-size: 12px; }
 .pick-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
 .pick-foot .pager { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--mute); }
 .pick-keys { margin: 10px 0 0; font-size: 12px; }

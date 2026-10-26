@@ -120,9 +120,15 @@
         </div>
         <p class="status-line" id="pk-total" aria-live="polite"></p>
         <p class="hint" id="pk-intro">Narrators do character voices, and some of those slip past the automatic check. Listen, and approve the clips that are the narrator’s own voice. With “Only use the clips I approve” on, training and its quality check use only those, and every recording is listened to so there’s all of it to choose from.</p>
+        <p class="hint">Mark a few clips that sound the way he should with ★. Every clip is then matched against them, best match first, and the close matches are marked.</p>
+        <div class="pick-match">
+          <p class="status-line" id="pk-match" aria-live="polite"></p>
+          <button type="button" class="primary" id="pk-approve-close" hidden>Approve the close matches</button>
+        </div>
         <div class="pick-bar">
           <div class="pick-tabs" id="pk-tabs" role="group" aria-label="Show"></div>
           <select id="pk-sort" aria-label="Order">
+            <option value="match">Most like the voice I marked first</option>
             <option value="likeness">Least like the narrator first</option>
             <option value="order">In book order</option>
           </select>
@@ -137,7 +143,9 @@
             <button type="button" class="quiet" id="pk-next" aria-label="Next page">›</button>
           </span>
         </div>
-        <p class="hint pick-keys">On a row: Space plays · A approves · X leaves out · ↑ ↓ move</p>
+        <p class="hint pick-keys">On a row: Space plays · A approves · X leaves out · R marks as the voice to match · ↑ ↓ move</p>
+        <p class="hint pick-recut">Clips heard before cuts were made where the speaker changes can mix the narrator and a character.
+          <button type="button" class="quiet small" id="pk-relisten">Cut the clips again</button></p>
       </div>
 
       <div class="lab-card" id="clone-card" hidden>
