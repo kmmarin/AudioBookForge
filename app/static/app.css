@@ -476,6 +476,20 @@ input[type="range"] { accent-color: var(--signal); width: 100%; }
 .g-list li { grid-template-columns: minmax(0, 1fr) auto; }
 .g-status { margin: 0; color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
 .g-status.bad { color: var(--fault); }
+.g-cards { display: grid; gap: 8px; margin-top: 8px; }
+.g-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+}
+.g-card.off { opacity: 0.6; }
+.g-card-use { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; min-width: 0; }
+.g-card-name { font-weight: 500; overflow-wrap: anywhere; }
+.g-card .g-bench { grid-column: 1 / -1; }
 .g-form { margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
 .g-fields { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 10px; }
 .g-actions { margin-top: 10px; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }

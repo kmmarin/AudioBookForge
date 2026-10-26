@@ -72,7 +72,7 @@ function el(tag, props = {}, ...children) {
     else if (k in node) node[k] = v;
     else node.setAttribute(k, v);
   }
-  node.append(...children);
+  node.append(...children.filter((c) => c !== null && c !== undefined));
   return node;
 }
 
@@ -1317,8 +1317,64 @@ function gpuRow(s, n, count) {
     if (confirm(`Remove ${s.name || s.url}? Cloned voices go to the other servers.${note}`)) gpuCall(`/api/gpu-servers/${s.id}`, { method: "DELETE" });
   });
   buttons.push(edit, remove);
-  li.append(el("div", { class: "w-who" }, head, where, status), el("div", { class: "w-actions" }, ...buttons));
+  li.append(el("div", { class: "w-who" }, head, where, status, gpuCards(s)), el("div", { class: "w-actions" }, ...buttons));
   return li;
+}
+
+// The server's cards: each one in use takes requests at the same time, and is
+// benchmarked before its first job (clone/server.py); Benchmark runs it again.
+const MODEL_SHORT = { "qwen3-tts-1.7b": "1.7B", "qwen3-tts-0.6b": "0.6B" };
+
+function benchText(card) {
+  if (card.benchmarking) return `Benchmarking ${MODEL_SHORT[card.benchmarking] || card.benchmarking}…`;
+  const done = Object.entries(card.models).filter(([, m]) => m.bench);
+  if (!done.length) {
+    const fits = Object.entries(card.models).filter(([, m]) => m.fits).map(([id]) => MODEL_SHORT[id] || id);
+    return fits.length ? `Runs ${fits.join(" and ")}. Not benchmarked yet: it will be before its first job.`
+      : "Too small for the voice models.";
+  }
+  return done.map(([id, m]) => `${MODEL_SHORT[id] || id}: ${m.bench.batch} sentences at once, ` +
+    `${m.bench.rtf}× real time, up to ${Math.round(m.bench.share * 100)}% of the card`).join(" · ");
+}
+
+function gpuCards(s) {
+  const cards = (s.health.cards || []).filter((c) => c.index !== null);
+  if (!s.health.ok || !cards.length) return null;
+  const box = el("div", { class: "g-cards" });
+  for (const c of cards) {
+    const use = el("input", { type: "checkbox", checked: c.enabled });
+    use.setAttribute("aria-label", `Use ${c.name}`);
+    use.addEventListener("change", () => {
+      const enabled = cards.filter((x) => (x === c ? use.checked : x.enabled)).map((x) => x.index);
+      gpuCall(`/api/gpu-servers/${s.id}/cards`, { method: "POST", json: { enabled } });
+    });
+    const bench = el("button", { type: "button", class: "quiet small", textContent: "Benchmark",
+      disabled: !c.enabled || Boolean(c.benchmarking) });
+    bench.title = "Measure again how hard this card can be pushed: how many sentences at once, and how much memory that takes";
+    bench.addEventListener("click", async () => {
+      bench.disabled = true;
+      await gpuCall(`/api/gpu-servers/${s.id}/bench`, { method: "POST", json: { cards: [c.index] } });
+      watchBench();
+    });
+    const facts = [`${c.gb} GB`, c.dtype, c.loaded ? `${MODEL_SHORT[c.loaded] || c.loaded} loaded` : null].filter(Boolean).join(" · ");
+    box.append(el("div", { class: `g-card${c.enabled ? "" : " off"}` },
+      el("label", { class: "g-card-use" }, use, el("span", { class: "g-card-name", textContent: c.name })),
+      el("span", { class: "g-status", textContent: facts }),
+      bench,
+      el("p", { class: "g-status g-bench", textContent: c.enabled ? benchText(c) : "Not used." })));
+  }
+  if (cards.some((c) => c.benchmarking)) watchBench();
+  return box;
+}
+
+// While a card benchmarks, the list follows it every few seconds.
+let benchTimer = null;
+function watchBench() {
+  clearTimeout(benchTimer);
+  benchTimer = setTimeout(async () => {
+    if (!$("#settings").open || $("#g-list .g-editing")) return;
+    await gpuCall("/api/gpu-servers?fresh=true");
+  }, 5000);
 }
 
 // A server changed in its own row: Save is there only once something differs.
