@@ -1244,6 +1244,7 @@ function renderGpus(data) {
     return el("li", {}, el("div", { class: "w-who" }, head, where, status, jobs), el("div", { class: "w-actions" }, ...buttons));
   }));
   if (!data.servers.length) $("#g-list").append(el("li", {}, el("p", { class: "g-status", textContent: "None yet. Cloned voices and pictures need one." })));
+  if (!data.servers.length) $("#g-howto").open = true;  // nothing set up yet: show how
   $("#g-where").textContent = `This list is kept in ${data.file} on the server, shared with the voice creator. A server set in .env (CLONE_URL) is listed too.`;
 }
 
@@ -1288,8 +1289,31 @@ function resetGpuForm() {
   $("#g-result").textContent = "";
 }
 
+// A new token for the set-up commands: made here, shown once, never sent anywhere
+// until it's added with a server.
+function freshToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  for (const node of document.querySelectorAll("#g-howto [data-token]")) node.textContent = token;
+  G.token = token;
+}
+
 function wireSettings() {
+  $("#g-use-token").addEventListener("click", () => {
+    $("#g-token").value = G.token;
+    $("#g-url").focus();
+    toast("The token is in the form: add the server's address and it's ready.");
+  });
+  for (const btn of document.querySelectorAll("#g-howto [data-copy]")) {
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(btn.parentElement.querySelector("[data-cmd]").textContent);
+        toast("Copied");
+      } catch { toast("Couldn’t copy here: select the command and copy it instead.", true); }
+    });
+  }
   $("#settings-btn").addEventListener("click", async () => {
+    freshToken();
     resetGpuForm();
     $("#g-list").replaceChildren(el("li", {}, el("p", { class: "g-status", textContent: "Checking the servers…" })));
     $("#settings").showModal();

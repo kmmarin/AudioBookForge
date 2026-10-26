@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Set up (or update) the clone server on a Windows PC with an NVIDIA GPU, in WSL
-# (Ubuntu with systemd), from a bundle of this repo's clone/ folder:
+# (Ubuntu with systemd), from this project's folder or a bundle of its clone/ folder:
 #
+#   wsl -u root -- bash deploy/clone-setup.sh --from /mnt/c/audiobook-forge
 #   wsl -u root -- bash clone-setup.sh --bundle /mnt/c/Users/me/forge-clone.tgz
+#
+# (deploy\gpu-server.ps1 -Mode wsl runs this, and opens the port to other machines.)
 #
 # The token Forge uses (its CLONE_TOKEN, or SHARE_TOKEN) comes on stdin, so it
 # never appears in a command line or log:  ... clone-setup.sh --bundle X < token-file
@@ -11,10 +14,11 @@
 # needs a port proxy and a firewall rule on the Windows side (clone/README.md).
 set -euo pipefail
 APP_DIR=/opt/audiobook-forge-clone
-BUNDLE=""
+BUNDLE="" FROM=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --bundle) BUNDLE="$2"; shift 2 ;;
+    --from) FROM="$2"; shift 2 ;;
     --app-dir) APP_DIR="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -22,7 +26,8 @@ done
 say() { printf '\n==> %s\n' "$*"; }
 die() { echo "Error: $*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "Run this as root: wsl -u root -- bash clone-setup.sh ..."
-[[ -n $BUNDLE && -f $BUNDLE ]] || die "Give the bundle: --bundle <path to forge-clone.tgz>"
+[[ -n $FROM && -f $FROM/docker-compose.clone.yml ]] || [[ -n $BUNDLE && -f $BUNDLE ]] ||
+  die "Give the project folder (--from <folder with docker-compose.clone.yml>) or a bundle (--bundle <file>)"
 [[ $(ps -p 1 -o comm=) == systemd ]] ||
   die "systemd isn't running. Add [boot] systemd=true to /etc/wsl.conf, run wsl --shutdown in Windows, then try again."
 /usr/lib/wsl/lib/nvidia-smi -L >/dev/null 2>&1 || nvidia-smi -L >/dev/null 2>&1 ||
@@ -60,9 +65,15 @@ fi
 docker info 2>/dev/null | grep -q 'Runtimes:.*nvidia' || { nvidia-ctk runtime configure --runtime=docker; systemctl restart docker; }
 systemctl enable --now docker >/dev/null
 
-say "Unpacking into $APP_DIR"
+say "Copying into $APP_DIR"
 mkdir -p "$APP_DIR"
-tar -xzf "$BUNDLE" -C "$APP_DIR"
+if [[ -n $FROM ]]; then
+  mkdir -p "$APP_DIR/clone"
+  cp -r "$FROM/clone/." "$APP_DIR/clone/"
+  cp "$FROM/docker-compose.clone.yml" "$APP_DIR/"
+else
+  tar -xzf "$BUNDLE" -C "$APP_DIR"
+fi
 cd "$APP_DIR"
 touch .env && chmod 600 .env
 if [[ -n $TOKEN ]]; then

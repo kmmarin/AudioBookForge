@@ -263,6 +263,30 @@
         another the pictures, or one can stand in when another is off.</p>
       <ol id="g-list" class="w-list g-list"></ol>
       <p class="hint" id="g-where"></p>
+      <details class="g-howto" id="g-howto">
+        <summary>How to set up a GPU server</summary>
+        <p>Any PC with a graphics card of 8 GB or more can be one: 12 GB or more for both jobs at their best. First get
+          Audiobook Forge onto that PC: <a href="https://github.com/kmmarin/AudioBookForge/archive/refs/heads/main.zip">download it</a>
+          and unzip it, or <code>git clone https://github.com/kmmarin/AudioBookForge.git</code>. Then pick how to run it.
+          The commands below already carry a new token: add the server below with the same one.</p>
+        <p class="g-token-line">Token: <code class="g-token" data-token></code>
+          <button type="button" class="quiet small" id="g-use-token">Use it in the form below</button></p>
+        <h4>Windows, natively (NVIDIA or AMD Radeon)</h4>
+        <p>No WSL or Docker; it starts by itself when Windows does. In PowerShell as administrator, in the project folder:</p>
+        <div class="g-cmd"><pre><code data-cmd>powershell -ExecutionPolicy Bypass -File deploy\gpu-server.ps1 -Mode windows -Token <span data-token></span></code></pre><button type="button" class="quiet small" data-copy>Copy</button></div>
+        <h4>Windows with WSL and Docker (NVIDIA)</h4>
+        <p>The same, in WSL 2 instead. It installs WSL if it's missing, and opens the port to other machines.</p>
+        <div class="g-cmd"><pre><code data-cmd>powershell -ExecutionPolicy Bypass -File deploy\gpu-server.ps1 -Mode wsl -Token <span data-token></span></code></pre><button type="button" class="quiet small" data-copy>Copy</button></div>
+        <h4>Linux with Docker (NVIDIA)</h4>
+        <p>With NVIDIA's container toolkit installed, in the project folder:</p>
+        <div class="g-cmd"><pre><code data-cmd>echo "CLONE_TOKEN=<span data-token></span>" &gt;&gt; .env
+docker compose -f docker-compose.clone.yml up -d --build</code></pre><button type="button" class="quiet small" data-copy>Copy</button></div>
+        <h4>On this machine, beside Forge</h4>
+        <p>With a 16 GB NVIDIA card, set <code>CLONE_LOCAL=true</code> in Forge's <code>.env</code> and run its installer again.
+          It's added here by itself.</p>
+        <p class="hint">Each install ends by showing the address to add below, like <code>http://192.168.1.30:8100</code>.
+          The first voice or picture downloads its model, about 7 GB each.</p>
+      </details>
       <form id="g-form" class="g-form">
         <h3 class="s-sub" id="g-form-title">Add a GPU server</h3>
         <div class="g-fields">
