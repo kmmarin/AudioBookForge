@@ -59,8 +59,10 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 - Two views: above the text, or full page with the sentence as a subtitle. Both are adapted from [SeeStory](https://github.com/pgotta/SeeStory) (MIT).
 
 **GPU servers and setup**
-- The clone server, for cloned voices and pictures: NVIDIA in Docker or WSL, or natively on Windows.
-- **Settings → GPU servers:** several servers, each doing voices, pictures or both, with automatic failover.
+- The clone server, for cloned voices and pictures: NVIDIA in Docker or WSL, or natively on Windows (NVIDIA or AMD Radeon).
+- A GPU server takes one line to set up on Windows or Linux, and ends by showing the address and token to paste into Forge.
+- **Settings → GPU servers:** several servers, each doing voices, pictures or both, with automatic failover. Each has a Test button, and changes are saved with Save.
+- Everything is on by default: the voice creator wherever there's an NVIDIA GPU, a clone server beside Forge on a card of 12 GB or more, even loudness and Kindle formats.
 - Installers:
   - Linux (`install.sh`)
   - Proxmox LXC
