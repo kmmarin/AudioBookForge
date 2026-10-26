@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Set a Linux machine with an NVIDIA GPU up as a GPU server for Audiobook Forge:
-# the clone server, which speaks cloned voices and draws Watch and read's pictures
-# for every Forge that lists it in Settings → GPU servers. One line:
+# the clone server, which speaks cloned voices for every Forge that lists it in
+# Settings → GPU servers. One line:
 #
 #   curl -fsSL https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.sh | sudo bash
 #

@@ -8,7 +8,6 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 
 | Feature | Where it stands |
 |---|---|
-| [Watch and read: the first real pictures](https://github.com/kmmarin/AudioBookForge/issues/2) | Scenes, the reader's two views and the drawing endpoint are built. It has drawn with a tiny test model only, not yet on a real GPU. |
 | [Cleaner trained (Piper) voices](https://github.com/kmmarin/AudioBookForge/issues/3) | Learning from a cloned voice's audio has cut the buzz from 5–7 dB to 4.0 dB so far. Real recordings measure 3.4. |
 | [Kokoro voices made for a narrator](https://github.com/kmmarin/AudioBookForge/issues/4) | It matches the narrator as closely as their own clips do, but distortion is 5.2 dB. Next: steer with a penalty on distortion. |
 
@@ -16,9 +15,6 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 
 - [Kokoro voice search in the voice creator](https://github.com/kmmarin/AudioBookForge/issues/5)
 - [Fine-tune Kokoro on a narrator](https://github.com/kmmarin/AudioBookForge/issues/6)
-- [Watch and read: consistent characters and places](https://github.com/kmmarin/AudioBookForge/issues/7)
-- [Watch and read: safety and control](https://github.com/kmmarin/AudioBookForge/issues/8)
-- [Watch and read: pictures travel with books to the server](https://github.com/kmmarin/AudioBookForge/issues/9)
 - [Move books and voices between machines](https://github.com/kmmarin/AudioBookForge/issues/10)
 - [Tests on every push](https://github.com/kmmarin/AudioBookForge/issues/11)
 
@@ -56,15 +52,10 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 - **Learn from the cloned voice:** Piper trained on a cloned voice's clean audio.
 - Forge plays Kokoro voicepacks made for a narrator.
 
-**Watch and read**
-- Scenes planned from the read-along map, with each one's most paintable sentence as the prompt.
-- Pictures drawn by the clone server and given one ink-on-paper look.
-- Two views: above the text, or full page with the sentence as a subtitle. Both are adapted from [SeeStory](https://github.com/pgotta/SeeStory) (MIT).
-
 **GPU servers and setup**
-- The clone server, for cloned voices and pictures: NVIDIA in Docker or WSL, or natively on Windows (NVIDIA or AMD Radeon).
+- The clone server, for cloned voices: NVIDIA in Docker or WSL, or natively on Windows (NVIDIA or AMD Radeon).
 - A GPU server takes one line to set up on Windows or Linux, and ends by showing the address and token to paste into Forge.
-- **Settings → GPU servers:** several servers, each doing voices, pictures or both, with automatic failover. Each has a Test button, and changes are saved with Save.
+- **Settings → GPU servers:** several servers, with automatic failover. Each has a Test button, and changes are saved with Save.
 - Everything is on by default: the voice creator wherever there's an NVIDIA GPU, a clone server beside Forge on a card of 12 GB or more, even loudness and Kindle formats.
 - Installers:
   - Linux (`install.sh`)

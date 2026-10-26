@@ -230,7 +230,6 @@ function activate(i) {
   if (!it) { hidePill(); return; }
   it.el.classList.add("r-on");
   wrap(it);
-  if (W.mode === "full") caption(it, -1);
   textEl.classList.add("r-live");
   if (R.chapterIdx !== it.ch.idx) {
     const first = R.chapterIdx === null;
@@ -250,7 +249,6 @@ function setWord(k) {
   else for (let j = Math.max(0, k); j <= R.word && j < spans.length; j++) spans[j].classList.remove("r-read");
   if (R.word >= 0 && spans[R.word]) spans[R.word].classList.remove("r-cur");
   R.word = k;
-  if (W.mode === "full") caption(it, k);
   if (k < 0 || !spans[k]) { hidePill(); return; }
   spans[k].classList.add("r-cur");
   spans[k].classList.remove("r-read");
@@ -306,173 +304,9 @@ function refreshPill() {
   if (it?.spans?.[R.word]) { R.pillShown = false; movePill(it.spans[R.word]); }
 }
 
-// --------------------------------------------------------- watch and read
-// Pictures of what's happening, above the text (app/scenes.py): the scene for
-// the moment being read, swept in as if being drawn, then drifting slowly
-// (SeeStory's Ken Burns presets), paused with the audio. A scene not drawn yet
-// keeps the last picture before it.
-const MOTION = {
-  gentle_drift: ["scale(1)", "scale(1.06)"],
-  slow_reveal: ["scale(1.09)", "scale(1)"],
-  pan_right: ["scale(1.08) translateX(2.5%)", "scale(1.08) translateX(-2.5%)"],
-  pan_left: ["scale(1.08) translateX(-2.5%)", "scale(1.08) translateX(2.5%)"],
-  drift_up: ["scale(1.06) translateY(2%)", "scale(1.06) translateY(-1.5%)"],
-};
-// mode: "off", "above" (the picture above the text) or "full" (the picture fills the
-// page with the sentence being read as a subtitle: SeeStory's view).
-const W = { mode: "off", data: null, scene: -1, shown: null, layer: 0, poll: 0,
-            capItem: null, capRange: null, capSpans: [], capWord: -1,
-            still: matchMedia("(prefers-reduced-motion: reduce)").matches };
-
-function sceneAt(t) {
-  const list = W.data?.scenes || [];
-  let lo = 0, hi = list.length - 1, found = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (list[mid].start <= t) { found = mid; lo = mid + 1; } else hi = mid - 1;
-  }
-  return Math.max(0, found);
-}
-
-function setWatch(mode) {
-  W.mode = ["above", "full"].includes(mode) ? mode : "off";
-  store.set("watchMode", W.mode);
-  document.body.classList.toggle("watching", W.mode === "above");
-  document.body.classList.toggle("watching-full", W.mode === "full");
-  document.body.style.setProperty("--r-player-h", `${$("#r-player").offsetHeight || 150}px`);
-  $("#r-watch").hidden = W.mode === "off";
-  $("#r-watch-btn").setAttribute("aria-pressed", String(W.mode !== "off"));
-  for (const b of document.querySelectorAll("#r-watch-menu [data-watch]")) {
-    b.setAttribute("aria-checked", String(b.dataset.watch === W.mode));
-  }
-  $("#r-watch-menu").hidden = true;
-  if (W.mode !== "off" && !W.data) loadScenes();
-  W.scene = -1;
-  W.capItem = null;
-  showScene();
-  if (W.mode === "full") caption(R.items[R.cur], R.word);
-  R.center = true;
-  kick();
-}
-
-// The sentence being read, under the picture in full page view, its word lit.
-function caption(it, k) {
-  const box = $("#r-watch-caption");
-  if (W.mode !== "full" || !it) { box.replaceChildren(); W.capItem = null; return; }
-  const at = k >= 0 ? it.w[k * 4] : 0;
-  if (W.capItem !== it || at < W.capRange[0] || at >= W.capRange[1]) {
-    const ends = [...it.text.matchAll(/[.!?…]["”’')\]]*\s+(?=\S)/g)].map((m) => m.index + m[0].length);
-    const s0 = Math.max(0, ...ends.filter((e) => e <= at));
-    const s1 = ends.find((e) => e > at) ?? it.text.length;
-    const frag = document.createDocumentFragment();
-    W.capSpans = [];
-    let pos = s0;
-    for (let j = 0; j < it.w.length / 4; j++) {
-      const a = it.w[j * 4], b = it.w[j * 4 + 1];
-      if (a < s0 || b > s1) continue;
-      if (a > pos) frag.append(it.text.slice(pos, a));
-      const span = el("span", { textContent: it.text.slice(a, b) });
-      span.dataset.k = j;
-      frag.append(span);
-      W.capSpans.push(span);
-      pos = b;
-    }
-    frag.append(it.text.slice(pos, s1));
-    box.replaceChildren(frag);
-    W.capItem = it;
-    W.capRange = [s0, s1];
-  }
-  for (const span of W.capSpans) span.classList.toggle("cur", Number(span.dataset.k) === k);
-}
-
-async function loadScenes() {
-  clearTimeout(W.poll);
-  try {
-    W.data = await api(`/api/books/${bookId}/scenes`);
-  } catch (err) {
-    W.data = null;
-  }
-  W.scene = -1;
-  showScene();
-  renderWatchStatus();
-  if (W.mode !== "off" && ["queued", "drawing"].includes(W.data?.state)) W.poll = setTimeout(loadScenes, 15000);
-}
-
-async function drawPictures() {
-  try {
-    W.data = await api(`/api/books/${bookId}/scenes`, { method: "POST" });
-    renderWatchStatus();
-    W.poll = setTimeout(loadScenes, 5000);
-  } catch (err) { toast(err.message, true); }
-}
-
-function renderWatchStatus() {
-  const d = W.data;
-  const busy = Boolean(d) && ["queued", "drawing"].includes(d.state);
-  let msg = "";
-  if (!d) msg = "Pictures come once the book has Read along.";
-  else if (!W.shown && busy) msg = d.message || "Waiting to draw the pictures";
-  else if (!W.shown && d.state === "failed") msg = d.message;
-  else if (!W.shown && !d.drawn) msg = d.can_draw
-    ? "No pictures for this book yet. The GPU server draws them, a few minutes per hour of listening."
-    : "Pictures are drawn by a GPU server, and this Forge has none set up (CLONE_URL).";
-  else if (!W.shown) msg = "No picture for this part yet.";
-  $("#r-watch-note").hidden = !msg;
-  $("#r-watch-msg").textContent = msg;
-  const make = $("#r-watch-make");
-  make.hidden = !(d && d.can_draw && !busy && d.drawn < d.total);
-  make.textContent = d && d.drawn ? `Draw the other ${d.total - d.drawn}` : "Draw the pictures";
-  const prog = $("#r-watch-progress");
-  prog.hidden = !(busy && W.shown);
-  prog.textContent = busy ? `Drawing ${d.drawn} of ${d.total}` : "";
-}
-
-function showScene() {
-  if (W.mode === "off" || !W.data?.scenes?.length) return;
-  const t = audio.currentTime;
-  const i = sceneAt(t);
-  if (i === W.scene) return;
-  W.scene = i;
-  // A scene not drawn yet keeps the picture of one just before it, not one from far back.
-  let k = i;
-  while (k > 0 && k > i - 2 && !W.data.scenes[k].image) k--;
-  const s = W.data.scenes[i];
-  const pic = W.data.scenes[k].image ? W.data.scenes[k] : null;
-  for (const next of W.data.scenes.slice(i + 1, i + 3)) if (next.image) new Image().src = picUrl(next);
-  if (!pic) { W.shown = null; for (const img of document.querySelectorAll(".r-watch-img")) img.classList.remove("on"); renderWatchStatus(); return; }
-  if (W.shown === pic.image) return;  // the same picture carries on
-  W.shown = pic.image;
-  W.layer ^= 1;
-  const img = $(W.layer ? "#r-watch-b" : "#r-watch-a"), old = $(W.layer ? "#r-watch-a" : "#r-watch-b");
-  const [from, to] = MOTION[s.motion] || MOTION.gentle_drift;
-  const rate = R.speed || 1;
-  const drift = Math.min(20, (s.end - s.start) / rate);
-  const into = Math.min(drift, Math.max(0, (t - s.start) / rate));
-  const show = () => {
-    if (W.shown !== pic.image) return;  // moved on while it loaded
-    img.style.setProperty("--kb-from", from);
-    img.style.setProperty("--kb-to", to);
-    img.style.animation = "none";
-    void img.offsetWidth;  // restart the animations
-    img.style.animation = W.still ? "" : `r-kb ${drift}s ease-out ${-into}s forwards${into < 0.5 ? ", r-reveal 1.4s ease-out" : ""}`;
-    img.classList.add("on");
-    old.classList.remove("on");
-  };
-  img.alt = s.alt || "";
-  const url = new URL(picUrl(pic), location.href).href;
-  // The same picture already in this layer loads no more: no load event to wait for.
-  if (img.src === url && img.complete) show();
-  else { img.onload = show; img.src = url; }
-  renderWatchStatus();
-}
-
-function picUrl(scene) {
-  return `/api/books/${bookId}/scenes/${scene.image}`;
-}
-
 // ---------------------------------------------------------- following
 function viewBand() {
-  const top = $(".r-top").offsetHeight + (W.mode === "above" ? $("#r-watch").offsetHeight : 0);
+  const top = $(".r-top").offsetHeight;
   const bottom = innerHeight - $("#r-player").offsetHeight;
   return { top, height: Math.max(120, bottom - top) };
 }
@@ -545,7 +379,6 @@ function frame(now) {
   const dt = Math.min(0.1, R.lastFrame ? (now - R.lastFrame) / 1000 : 0.016);
   R.lastFrame = now;
   tick();
-  if (W.mode !== "off") showScene();
   aim();
   const scrolling = scrollStep(dt);
   if (!audio.paused) {
@@ -1397,16 +1230,6 @@ function wire() {
     applyTheme(next);
   });
 
-  // Watch and read: off, above the text or full page; the pictures pause and carry on with the audio.
-  $("#r-watch-btn").addEventListener("click", (e) => { e.stopPropagation(); $("#r-watch-menu").hidden = !$("#r-watch-menu").hidden; });
-  for (const b of document.querySelectorAll("#r-watch-menu [data-watch]")) b.addEventListener("click", () => setWatch(b.dataset.watch));
-  document.addEventListener("click", (e) => { if (!e.target.closest("#r-watch-menu, #r-watch-btn")) $("#r-watch-menu").hidden = true; });
-  $("#r-watch-make").addEventListener("click", drawPictures);
-  audio.addEventListener("pause", () => $("#r-watch").classList.add("paused"));
-  audio.addEventListener("play", () => $("#r-watch").classList.remove("paused"));
-  audio.addEventListener("seeked", () => { if (W.mode !== "off") showScene(); });  // lock-screen seeks too
-  addEventListener("resize", () => document.body.style.setProperty("--r-player-h", `${$("#r-player").offsetHeight || 150}px`));
-
   // Keyboard: space plays, arrows skip, shift+arrows change chapter, B marks.
   addEventListener("keydown", (e) => {
     if (R.textOnly || e.target.closest?.("input, textarea, select, dialog") || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1527,7 +1350,6 @@ async function init() {
   $("#r-status").hidden = true;
   textEl.hidden = false;
   $("#r-player").hidden = false;
-  setWatch(store.get("watchMode", store.get("watch", false) ? "above" : "off"));
   audio.src = `/api/books/${bookId}/audio`;
   setupMediaSession();
   updateMediaMeta();

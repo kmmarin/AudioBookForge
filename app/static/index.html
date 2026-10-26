@@ -22,7 +22,7 @@
       <a class="quiet create-voice" id="create-voice" href="/createvoice/" hidden
          title="Train a new voice from a narrator’s recordings">Create a voice</a>
       <button type="button" class="quiet theme" id="who" title="Who reads along: everyone keeps their own place">Listeners</button>
-      <button type="button" class="quiet theme" id="settings-btn" title="GPU servers for cloned voices and pictures">Settings</button>
+      <button type="button" class="quiet theme" id="settings-btn" title="GPU servers for cloned voices">Settings</button>
       <button type="button" class="quiet theme" id="theme">Light theme</button>
     </div>
   </header>
@@ -293,14 +293,13 @@
     </div>
     <div class="sheet-body">
       <h3 class="s-sub">GPU servers</h3>
-      <p class="hint">Machines running the clone server (<code>clone/</code>) speak cloned voices and draw Watch and read’s
-        pictures. Each job goes to the first server here that does it and is answering: one card can do the voices and
-        another the pictures, or one can stand in when another is off.</p>
+      <p class="hint">Machines running the clone server (<code>clone/</code>) speak cloned voices. Each job goes to the
+        first server here that's answering, so one can stand in when another is off.</p>
       <ol id="g-list" class="w-list g-list"></ol>
       <p class="hint" id="g-where"></p>
       <details class="g-howto" id="g-howto">
         <summary>How to set up a GPU server</summary>
-        <p>Any PC with a graphics card of 8 GB or more can be one: 12 GB or more for both jobs at their best. Run one
+        <p>Any PC with a graphics card of 8 GB or more can be one. Run one
           line on it. It downloads what it needs, starts the server, and ends by showing the <b>address</b> and
           <b>token</b>: paste them into <b>Add a GPU server</b> below. Running it again updates the server and keeps its token.</p>
         <h4>Windows, natively (NVIDIA or AMD Radeon)</h4>
@@ -315,7 +314,7 @@
         <h4>On this machine, beside Forge</h4>
         <p>With an NVIDIA card of 12 GB or more, Forge's installer runs it here by itself (<code>CLONE_LOCAL=auto</code>),
           and it's listed above.</p>
-        <p class="hint">The first voice or picture it makes downloads that model, about 7 GB each.</p>
+        <p class="hint">The first cloned voice it speaks downloads the voice model, about 4.5 GB.</p>
       </details>
       <form id="g-form" class="g-form">
         <h3 class="s-sub" id="g-form-title">Add a GPU server</h3>
@@ -323,10 +322,6 @@
           <div class="field"><label for="g-name">Name</label><input id="g-name" maxlength="60" placeholder="gaming-pc" autocomplete="off"></div>
           <div class="field"><label for="g-url">Address</label><input id="g-url" placeholder="http://192.168.1.30:8100" autocomplete="off"></div>
           <div class="field"><label for="g-token">Token</label><input id="g-token" type="password" autocomplete="new-password" placeholder="Its CLONE_TOKEN"></div>
-        </div>
-        <div class="g-jobs" role="group" aria-label="Jobs">
-          <label><input type="checkbox" id="g-voices" checked> Voices</label>
-          <label><input type="checkbox" id="g-pictures" checked> Pictures</label>
         </div>
         <div class="g-actions">
           <p class="hint g-result" id="g-result" role="status"></p>

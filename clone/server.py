@@ -8,11 +8,6 @@ after CLONE_IDLE_SECONDS without work, so the GPU is free for other things.
 
 It lives in an image of its own: qwen-tts needs transformers 4.57, and
 Forge's image has 5.x (Kokoro), which qwen-tts's model code doesn't run on.
-
-It also draws Watch and read's pictures (/api/draw, app/scenes.py): a fast
-SDXL model, on the same GPU, sharing the one model slot. Voices come first: while
-a cloned voice is being spoken, drawing waits (503) and Forge asks again later.
-The drawing settings are adapted from SeeStory (THIRD_PARTY_NOTICES.md).
 """
 from __future__ import annotations
 
@@ -61,21 +56,6 @@ MODELS = {
     "qwen3-tts-0.6b": {"label": "Qwen3-TTS 0.6B", "hf": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
                        "bf16_gb": 3.0, "fp32_gb": 5.5},
 }
-
-
-# Picture models for /api/draw: Lightning versions draw in 4 steps. DreamShaper XL
-# Lightning (SeeStory's choice) draws every illustrated style well.
-DRAW_MODELS = {
-    "dreamshaper-xl-lightning": {"label": "DreamShaper XL Lightning", "hf": "Lykon/dreamshaper-xl-lightning",
-                                 "bf16_gb": 8.0, "fp32_gb": 14.0, "steps": 4, "guidance": 2.0},
-}
-VOICE_FIRST_SECONDS = 60  # a voice spoken this recently keeps the GPU: drawing waits
-# MIOpen is fine for drawing: pictures are all one size, so its kernel search happens once.
-DRAW_MIOPEN = os.environ.get("CLONE_DRAW_MIOPEN", "on").lower() in ("1", "on", "true")
-
-
-class Busy(RuntimeError):
-    """The GPU is speaking a cloned voice: ask again shortly."""
 
 
 class BadAudio(RuntimeError):
@@ -161,9 +141,6 @@ class Engine:
         if self.model_id == model_id:
             return
         self._unload()
-        if model_id in DRAW_MODELS:
-            self._load_draw(model_id)
-            return
         from qwen_tts import Qwen3TTSModel
         dtype = dtype_name()
         cuda = torch.cuda.is_available()
@@ -187,69 +164,6 @@ class Engine:
                                                    dtype=getattr(torch, dtype), attn_implementation=attn)
         self.model_id = model_id
         log.info("Loaded %s (%s, %s) in %.1f s", model_id, dtype, attn, time.monotonic() - t0)
-
-    def _load_draw(self, model_id: str) -> None:
-        """A picture model, in float16 on a GPU (float32 on GTX 16xx and the CPU),
-        whole on cards from 10.5 GB and offloaded part by part on smaller ones."""
-        from diffusers import AutoPipelineForText2Image, DPMSolverMultistepScheduler
-        cuda = torch.cuda.is_available()
-        dtype = torch.float32 if dtype_name() == "float32" else torch.float16
-        if cuda:
-            torch.cuda.set_per_process_memory_fraction(GPU_SHARE, 0)
-        t0 = time.monotonic()
-        kwargs = {"torch_dtype": dtype, "use_safetensors": True, "low_cpu_mem_usage": True}
-        try:
-            pipe = AutoPipelineForText2Image.from_pretrained(
-                DRAW_MODELS[model_id]["hf"], **kwargs, **({"variant": "fp16"} if dtype == torch.float16 else {}))
-        except Exception:
-            pipe = AutoPipelineForText2Image.from_pretrained(DRAW_MODELS[model_id]["hf"], **kwargs)
-        pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-        pipe.enable_vae_tiling()
-        _, total = gpu_info()
-        if cuda and (total or 0) <= 10.5:
-            pipe.enable_model_cpu_offload()
-        elif cuda:
-            pipe = pipe.to("cuda")
-        pipe.set_progress_bar_config(disable=True)
-        self.model, self.model_id = pipe, model_id
-        log.info("Loaded %s (%s) in %.1f s", model_id, str(dtype).removeprefix("torch."), time.monotonic() - t0)
-
-    def draw(self, model_id: str, prompt: str, negative: str, width: int, height: int,
-             seed: int | None) -> tuple[bytes, int, int]:
-        """One picture as JPEG, at the size asked or smaller after running out of
-        memory (SeeStory's fallbacks). Busy while a voice was spoken just now."""
-        with self.lock:
-            if (self.model_id in MODELS and time.monotonic() - self.last_used < VOICE_FIRST_SECONDS):
-                raise Busy("The GPU is speaking a cloned voice; try again in a minute.")
-            self.last_used = time.monotonic()
-            try:
-                self._load(model_id)
-                spec = DRAW_MODELS[model_id]
-                generator = torch.Generator(device="cpu").manual_seed(int(seed)) if seed is not None else None
-                sizes = [(width, height)] + [s for s in ((896, 504), (768, 432), (640, 360)) if s[0] < width]
-                miopen = torch.backends.cudnn.enabled
-                if ROCM and DRAW_MIOPEN:
-                    torch.backends.cudnn.enabled = True
-                try:
-                    for w, h in sizes:
-                        try:
-                            with torch.inference_mode():
-                                image = self.model(prompt=prompt, negative_prompt=negative or None,
-                                                   num_inference_steps=spec["steps"], guidance_scale=spec["guidance"],
-                                                   width=w, height=h, generator=generator).images[0]
-                            buf = io.BytesIO()
-                            image.save(buf, "JPEG", quality=92)
-                            return buf.getvalue(), w, h
-                        except Exception as exc:
-                            if not is_oom(exc):
-                                raise
-                            self._free()
-                            log.warning("Out of video memory drawing at %dx%d; trying smaller", w, h)
-                    raise TooLong("Even the smallest picture ran out of video memory.")
-                finally:
-                    torch.backends.cudnn.enabled = miopen
-            finally:
-                self.last_used = time.monotonic()
 
     def _unload(self) -> None:
         if self.model is None:
@@ -382,13 +296,9 @@ def health():
     for model_id, m in MODELS.items():
         fits, note = model_fits(m)
         models.append({"id": model_id, "label": m["label"], "hf": m["hf"], "fits": fits, "note": note})
-    draw = []
-    for model_id, m in DRAW_MODELS.items():
-        fits, note = model_fits(m)
-        draw.append({"id": model_id, "label": m["label"], "hf": m["hf"], "fits": fits, "note": note})
     return {"ok": True, "device": "cuda" if name else "cpu", "gpu": name,
             "gpu_gb": round(total, 1) if total else None, "dtype": dtype_name(),
-            "loaded": engine.model_id, "models": models, "draw_models": draw}
+            "loaded": engine.model_id, "models": models}
 
 
 def _key_ok(key: str) -> bool:
@@ -477,36 +387,6 @@ def speak(body: SpeakBody):
     log.info("%s: %d sentence%s, %.1f s of audio in %.1f s (%.2fx real time)", body.model, len(sentences),
              "" if len(sentences) == 1 else "s", seconds, took, seconds / took if took else 0)
     return {"rate": rate, "audio": out}
-
-
-class DrawBody(BaseModel):
-    prompt: str
-    negative: str = ""
-    model: str = "dreamshaper-xl-lightning"
-    width: int = 1024
-    height: int = 576
-    seed: int | None = None
-
-
-@app.post("/api/draw")
-def draw(body: DrawBody):
-    """One picture for Watch and read: {"image": base64 JPEG, "width", "height"}.
-    503 while a cloned voice is being spoken: voices come first."""
-    if body.model not in DRAW_MODELS:
-        raise HTTPException(400, f"Unknown picture model {body.model!r}. This server has: {', '.join(DRAW_MODELS)}.")
-    if not body.prompt.strip() or len(body.prompt) > 2000:
-        raise HTTPException(400, "Send a prompt of 1 to 2000 characters.")
-    width = max(128, min(1536, body.width // 8 * 8))
-    height = max(128, min(1536, body.height // 8 * 8))
-    t0 = time.monotonic()
-    try:
-        data, w, h = engine.draw(body.model, body.prompt.strip(), body.negative.strip(), width, height, body.seed)
-    except Busy as exc:
-        raise HTTPException(503, str(exc), headers={"Retry-After": "60"})
-    except TooLong as exc:
-        raise HTTPException(507, str(exc))
-    log.info("%s: %dx%d picture in %.1f s", body.model, w, h, time.monotonic() - t0)
-    return {"image": base64.b64encode(data).decode(), "width": w, "height": h}
 
 
 @app.post("/api/unload")

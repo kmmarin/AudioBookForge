@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import (audiofile, config, covers, db, gpus, gutenberg, listeners, lookup, parsers, previews, publish, readalong,
-               scenes, textprep, transcript, versions, voices)
+               textprep, transcript, versions, voices)
 
 BUSY = {"voicing", "assembling", "checking", "transcribing"}
 STARTABLE = {"ready", "done", "failed", "cancelled"}
@@ -873,48 +873,6 @@ def stream_audio(book_id: str):
     return FileResponse(path, media_type=AUDIO_TYPES.get(path.suffix.lstrip("."), "application/octet-stream"))
 
 
-@app.get("/api/books/{book_id}/scenes")
-def get_scenes(book_id: str):
-    """Watch and read: the book's scenes (times, movement, picture once drawn) and how drawing is going."""
-    require_book(book_id)
-    try:
-        return scenes.public(book_id)
-    except FileNotFoundError as exc:
-        raise HTTPException(404, str(exc))
-
-
-@app.get("/api/books/{book_id}/scenes/{name}")
-def scene_picture(book_id: str, name: str):
-    require_book(book_id)
-    path = scenes.folder(book_id) / name
-    if not re.fullmatch(r"[0-9a-f]{16}\.jpg", name) or not path.exists():
-        raise HTTPException(404, "No such picture")
-    # Named after what it was drawn from: the same name is always the same picture.
-    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "max-age=31536000, immutable"})
-
-
-@app.post("/api/books/{book_id}/scenes")
-def make_scenes(book_id: str):
-    """Draw the book's pictures (those it hasn't got yet), in the worker, on the clone server."""
-    require_book(book_id)
-    if not readalong.path_for(book_id).exists():
-        raise HTTPException(409, "Make Read along first: the pictures follow its timing.")
-    if not gpus.has("pictures"):
-        raise HTTPException(400, "Pictures are drawn by a GPU server: add one in Settings.")
-    scenes.plan(book_id)
-    scenes.queue(book_id)
-    scenes.set_state(book_id, state="queued", message="Waiting to draw the pictures")
-    return scenes.public(book_id)
-
-
-@app.delete("/api/books/{book_id}/scenes/queued")
-def stop_scenes(book_id: str):
-    """Stop drawing; the pictures already drawn stay."""
-    require_book(book_id)
-    (scenes.folder(book_id) / "queued").unlink(missing_ok=True)
-    return scenes.public(book_id)
-
-
 @app.get("/api/books/{book_id}/readalong")
 def get_readalong(book_id: str, request: Request):
     """Where every word is in the audio. A long book's map is a few megabytes of
@@ -1023,23 +981,21 @@ def _check_token(request: Request) -> None:
 
 
 # --- Settings: GPU servers (app/gpus.py) -------------------------------------------
-# Machines running the clone server, and which jobs each does: voices, pictures.
-# Tokens go in but never come back out.
+# Machines running the clone server, which speaks cloned voices. Tokens go in
+# but never come back out.
 
 class GpuServerBody(BaseModel):
     name: str | None = None
     url: str | None = None
     token: str | None = None  # omitted: keep the saved one; "": none
-    voices: bool | None = None
-    pictures: bool | None = None
 
 
 def _gpu_json(s: dict) -> dict:
     h = gpus.health(s)
     return {"id": s["id"], "name": s.get("name") or "", "url": s["url"], "source": s["source"],
-            "voices": bool(s.get("voices")), "pictures": bool(s.get("pictures")), "has_token": bool(s.get("token")),
+            "has_token": bool(s.get("token")),
             "health": {"ok": bool(h.get("ok")), "error": h.get("error"), "gpu": h.get("gpu"), "gpu_gb": h.get("gpu_gb"),
-                       "loaded": h.get("loaded"), "draws": bool(h.get("draw_models")),
+                       "loaded": h.get("loaded"),
                        "voices": [m["label"] for m in h.get("models") or [] if m.get("fits")]}}
 
 
@@ -1066,8 +1022,7 @@ def add_gpu_server(body: GpuServerBody):
     if any(s["url"].rstrip("/") == url for s in servers):
         raise HTTPException(409, "That server is in the list already.")
     servers.append({"id": gpus.new_id(), "name": (body.name or "").strip()[:60] or urlparse(url).hostname,
-                    "url": url, "token": (body.token or "").strip(),
-                    "voices": body.voices is not False, "pictures": body.pictures is not False})
+                    "url": url, "token": (body.token or "").strip(), "voices": True})
     gpus.save(servers)
     return _gpu_list()
 
@@ -1091,9 +1046,6 @@ def change_gpu_server(server_id: str, body: GpuServerBody):
         s["name"] = body.name.strip()[:60] or urlparse(s["url"]).hostname
     if body.token is not None:
         s["token"] = body.token.strip()
-    for role in gpus.ROLES:
-        if getattr(body, role) is not None:
-            s[role] = getattr(body, role)
     gpus.save(servers)
     return _gpu_list()
 
@@ -1108,7 +1060,7 @@ def remove_gpu_server(server_id: str):
 
 @app.post("/api/gpu-servers/{server_id}/first")
 def gpu_server_first(server_id: str):
-    """Try this server first for its jobs."""
+    """Try this server first."""
     servers = gpus.load()
     s = _settings_server(servers, server_id)
     gpus.save([s] + [x for x in servers if x is not s])
@@ -1122,7 +1074,7 @@ def test_gpu_server(body: GpuServerBody):
     url = _gpu_url(body.url)
     h = gpus.health({"url": url}, max_age=0)
     out = {"ok": bool(h.get("ok")), "error": h.get("error"), "gpu": h.get("gpu"), "gpu_gb": h.get("gpu_gb"),
-           "draws": bool(h.get("draw_models")), "token_ok": None}
+           "token_ok": None}
     if out["ok"]:
         token = body.token
         if token is None:  # editing: the saved one

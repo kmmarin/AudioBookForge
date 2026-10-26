@@ -7,9 +7,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends sox libsndfile1 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 # qwen-tts brings transformers 4.57.3, accelerate and gradio (with FastAPI and
-# Uvicorn); these versions ran together on the GTX 1660 test bench. diffusers
-# draws Watch and read's pictures (/api/draw).
-RUN pip install --no-cache-dir qwen-tts==0.1.1 fastapi==0.162.0 uvicorn==0.54.0 soundfile==0.14.0 diffusers==0.37.1
+# Uvicorn); these versions ran together on the GTX 1660 test bench.
+RUN pip install --no-cache-dir qwen-tts==0.1.1 fastapi==0.162.0 uvicorn==0.54.0 soundfile==0.14.0
 
 ENV HF_HOME=/hf CLONE_DATA=/data PYTHONUNBUFFERED=1
 WORKDIR /srv

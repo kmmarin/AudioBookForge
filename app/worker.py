@@ -30,7 +30,7 @@ from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, Thr
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
-from . import (assemble, config, covers, db, gpus, gpushare, previews, publish, qa, readalong, scenes, textprep,
+from . import (assemble, config, covers, db, gpus, gpushare, previews, publish, qa, readalong, textprep,
                transcribe, tts, versions, voices)
 
 log = logging.getLogger("forge.worker")
@@ -403,8 +403,6 @@ def main() -> None:
         threading.Thread(target=publish.voice_sync_loop, args=(_stop,), daemon=True, name="voice-sync").start()
     # Cloned voices: threads that wait on the clone server, beside the pool.
     clone_exec = ThreadPoolExecutor(max_workers=max(1, config.CLONE_WORKERS), thread_name_prefix="clone")
-    # Watch and read's pictures: drawn by the clone server too, one at a time.
-    threading.Thread(target=scenes.draw_loop, args=(_stop,), daemon=True, name="pictures").start()
     active: dict[str, ActiveBook] = {}
     samples: dict[Future, str] = {}  # sample in the pool -> sample id
     clone_samples: dict[Future, str] = {}  # sample at the clone server -> sample id

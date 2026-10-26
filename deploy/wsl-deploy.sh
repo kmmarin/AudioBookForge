@@ -114,7 +114,7 @@ if $GPU; then
     mkdir -p voicelab-data
     echo "Voice creator: on (Create a voice, at the top of Forge's page)"
   fi
-  # The clone server (cloned voices, Watch and read's pictures) on this GPU too:
+  # The clone server (cloned voices) on this GPU too:
   # Forge and the voice creator reach it by name, and it takes a smaller share of
   # the card, which it now shares with them. CLONE_LOCAL=auto (the default): on a
   # card with 12 GB or more.
@@ -132,7 +132,7 @@ if $GPU; then
     grep -qE '^CLONE_TOKEN=.+' .env || set_env CLONE_TOKEN "$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
     grep -qE '^CLONE_GPU_SHARE=.+' .env || set_env CLONE_GPU_SHARE 0.6
     grep -qE '^CLONE_BATCH=.+' .env || set_env CLONE_BATCH 8
-    echo "Clone server: on, on this GPU (cloned voices and pictures)"
+    echo "Clone server: on, on this GPU (cloned voices)"
   fi
 fi
 # HTTPS stays on once ./https-setup.sh has set it up (a name and DNS credentials).

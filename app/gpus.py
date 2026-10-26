@@ -1,17 +1,16 @@
 """GPU servers: the machines running the clone server (clone/server.py) that
-speak cloned voices and draw Watch and read's pictures, and which does which.
+speak cloned voices.
 
 The list is kept in GPU_SERVERS_FILE, in the shared models volume so Forge and
 the voice creator read the same one, and changed on Forge's Settings page:
 
     {"servers": [{"id": "a1b2c3d4", "name": "gaming-pc", "url": "http://192.168.1.30:8100",
-                  "token": "…", "voices": true, "pictures": true}]}
+                  "token": "…", "voices": true}]}
 
 A server set in .env (CLONE_URL, with CLONE_TOKEN or SHARE_TOKEN) is listed
-too, after them, doing both jobs; it's changed in .env. A job goes to the first
-server that does it and is answering (checked at most every HEALTH_SECONDS),
-else to the first that does it, so its error says what's wrong. So one card can
-speak the voices and another draw the pictures, or one stand in for another.
+too, after them; it's changed in .env. A job goes to the first server that is
+answering (checked at most every HEALTH_SECONDS), else to the first, so its
+error says what's wrong. So one server can stand in for another.
 
 Standard library only (and app/clone.py for a client): the voice creator imports this too.
 """
@@ -26,7 +25,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROLES = ("voices", "pictures")
+ROLES = ("voices",)
 FILE = Path(os.environ.get("GPU_SERVERS_FILE")
             or Path(os.environ.get("MODELS_DIR") or "/models") / "gpu-servers.json")
 HEALTH_SECONDS = 30
@@ -40,7 +39,7 @@ def _env_server() -> dict | None:
         return None
     token = (os.environ.get("CLONE_TOKEN") or "").strip() or (os.environ.get("SHARE_TOKEN") or "").strip()
     return {"id": "env", "name": "Set in .env", "url": url, "token": token,
-            "voices": True, "pictures": True, "source": "env"}
+            "voices": True, "source": "env"}
 
 
 def load() -> list[dict]:
@@ -49,7 +48,9 @@ def load() -> list[dict]:
         data = json.loads(FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
-    return [{**s, "source": "settings"} for s in data.get("servers") or [] if isinstance(s, dict) and s.get("url")]
+    # Every server speaks voices (one saved for pictures only, before they were dropped, too).
+    return [{**s, "voices": True, "source": "settings"}
+            for s in data.get("servers") or [] if isinstance(s, dict) and s.get("url")]
 
 
 def save(servers: list[dict]) -> None:
@@ -77,7 +78,7 @@ def new_id() -> str:
 
 
 def health(server: dict, max_age: float = HEALTH_SECONDS) -> dict:
-    """The server's /api/health ({"ok", "gpu", "gpu_gb", "loaded", "models", "draw_models"}),
+    """The server's /api/health ({"ok", "gpu", "gpu_gb", "loaded", "models"}),
     or {"ok": False, "error"}; cached briefly."""
     url = server["url"].rstrip("/")
     with _lock:

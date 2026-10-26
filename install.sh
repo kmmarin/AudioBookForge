@@ -44,7 +44,7 @@ if command -v nvidia-smi >/dev/null 2>&1 && docker info 2>/dev/null | grep -qi n
       if grep -q '^CLONE_TOKEN=' .env; then sed -i "s|^CLONE_TOKEN=.*|CLONE_TOKEN=$token|" .env; else echo "CLONE_TOKEN=$token" >> .env; fi
     fi
     grep -qE '^CLONE_GPU_SHARE=' .env || echo "CLONE_GPU_SHARE=0.6" >> .env
-    echo "Clone server: on (cloned voices and Watch and read's pictures)."
+    echo "Clone server: on (cloned voices)."
   fi
 fi
 

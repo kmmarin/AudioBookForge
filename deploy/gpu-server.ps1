@@ -1,6 +1,6 @@
 # Set this Windows PC up as a GPU server for Audiobook Forge: the clone server,
-# which speaks cloned voices and draws Watch and read's pictures for every Forge
-# that lists it in Settings → GPU servers. One line, in PowerShell as administrator:
+# which speaks cloned voices for every Forge that lists it in Settings → GPU
+# servers. One line, in PowerShell as administrator:
 #
 #   irm https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.ps1 | iex
 #
