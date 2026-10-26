@@ -38,6 +38,11 @@ if command -v nvidia-smi >/dev/null 2>&1 && docker info 2>/dev/null | grep -qi n
   if [ "$clone_local" = true ]; then
     files+=(-f docker-compose.clone.yml)
     grep -qE '^CLONE_URL=.+' .env || sed -i 's|^CLONE_URL=.*|CLONE_URL=http://clone:8100|' .env
+    # Its port is open to other machines too (another Forge may use this card): never without a token.
+    if ! grep -qE '^CLONE_TOKEN=.+' .env; then
+      token=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+      if grep -q '^CLONE_TOKEN=' .env; then sed -i "s|^CLONE_TOKEN=.*|CLONE_TOKEN=$token|" .env; else echo "CLONE_TOKEN=$token" >> .env; fi
+    fi
     grep -qE '^CLONE_GPU_SHARE=' .env || echo "CLONE_GPU_SHARE=0.6" >> .env
     echo "Clone server: on (cloned voices and Watch and read's pictures)."
   fi
