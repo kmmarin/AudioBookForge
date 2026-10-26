@@ -34,7 +34,10 @@
         <p class="drop-title">Drop books here to add them</p>
         <p class="drop-sub" id="accept-list">EPUB, PDF, Word, plain text and more</p>
       </div>
-      <button type="button" class="primary" id="pick">Choose files</button>
+      <div class="drop-buttons">
+        <button type="button" class="quiet" id="free-btn" hidden title="Search Project Gutenberg's public-domain books">Find a free book</button>
+        <button type="button" class="primary" id="pick">Choose files</button>
+      </div>
     </section>
 
     <section id="batch" class="batch" hidden>
@@ -249,6 +252,35 @@
         </div>
         <button type="submit" class="primary">Add</button>
       </form>
+    </div>
+  </dialog>
+
+  <dialog id="free" class="sheet" aria-labelledby="f-heading">
+    <div class="sheet-head">
+      <h2 id="f-heading">Find a free book</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint">Over 70,000 books from <a href="https://www.gutenberg.org" target="_blank" rel="noopener">Project Gutenberg</a>,
+        free because they’re in the public domain in the USA. Forge searches a copy of their catalog, and fetches a book only when you add it.</p>
+      <form id="f-form" class="l-form">
+        <div class="field"><label for="f-q">Title or author</label><input id="f-q" autocomplete="off" placeholder="Pride and Prejudice, Jules Verne…"></div>
+        <div class="field"><label for="f-lang">Language</label>
+          <select id="f-lang">
+            <option value="en">English</option><option value="fr">French</option><option value="de">German</option>
+            <option value="es">Spanish</option><option value="it">Italian</option><option value="pt">Portuguese</option>
+            <option value="">Any</option>
+          </select>
+        </div>
+        <button type="submit" class="primary">Search</button>
+      </form>
+      <p class="hint" id="f-status" aria-live="polite"></p>
+      <ol id="f-results" class="voice-list f-results"></ol>
+      <p class="hint f-terms">Each book comes with its Project Gutenberg license, which stays in the file. It allows nearly any use, and
+        sharing a copy means keeping that license with it. Outside the USA, check that a book is public domain where you live too.
+        <a href="https://www.gutenberg.org/policy/license.html" target="_blank" rel="noopener">The license</a></p>
     </div>
   </dialog>
 

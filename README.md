@@ -52,6 +52,8 @@ model is downloaded at first use from the project that publishes it (see
 | **Speed** | Chapters are cut into small units that every worker voices in parallel, longest first, and several books share the workers. Units are cached under a hash of voice, speed and text, so a restart, a cancel or a text edit only re-voices what changed. Runs on the CPU, or on an NVIDIA GPU. |
 | **Narration check** | Whisper transcribes a sample of every chapter and compares it with the text. A misread chapter is flagged, and **Redo** voices only the flagged chapters again. |
 | **Versions** | Each voice a book has been made in is kept. Switching back to one takes seconds, and Read along changes voice on the same word. |
+| **Free books** | **Find a free book** searches Project Gutenberg's 70,000+ public-domain books and adds one with a click. It keeps to their [terms of use](https://www.gutenberg.org/policy/terms_of_use.html): Forge downloads their catalog once a week and searches it itself, fetches a book only when you add it (at most 50 a day), and only if its record says public domain in the USA. The book keeps its Project Gutenberg license. `GUTENBERG=false` hides it. |
+| **Read before voicing** | A book that isn't voiced yet opens in the reader as text, with **Voice it now** above it. |
 | **Exports** | The small **⋯** under a book's buttons downloads its audio, its text as one plain-text file, and the voice it's read in, if you made that voice. In **Compare voices**, each voice you made has its own **⋯**. |
 
 ### Read along

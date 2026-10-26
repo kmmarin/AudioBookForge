@@ -531,7 +531,7 @@ function resumeFollowing() {
 
 // ---------------------------------------------------------------- the loop
 function tick() {
-  if (!R.starts) return;  // no map yet (still being made): nothing to follow
+  if (!R.starts || R.textOnly) return;  // no map yet, or no audio to follow
   const t = Math.round(audio.currentTime * 100);
   const i = itemAt(t);
   if (i !== R.cur) activate(i);
@@ -1353,7 +1353,7 @@ function wire() {
 
   // Tap a word (or a block) to listen from there.
   textEl.addEventListener("click", (e) => {
-    if (!window.getSelection()?.isCollapsed) return;
+    if (R.textOnly || !window.getSelection()?.isCollapsed) return;
     const node = e.target.closest(".r-b, .r-h");
     if (!node) return;
     const it = R.items[Number(node.dataset.i)];
@@ -1409,7 +1409,7 @@ function wire() {
 
   // Keyboard: space plays, arrows skip, shift+arrows change chapter, B marks.
   addEventListener("keydown", (e) => {
-    if (e.target.closest?.("input, textarea, select, dialog") || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (R.textOnly || e.target.closest?.("input, textarea, select, dialog") || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === " ") { e.preventDefault(); togglePlay(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); e.shiftKey ? goChapter(-1) : seekTo(audio.currentTime - 15); }
     else if (e.key === "ArrowRight") { e.preventDefault(); e.shiftKey ? goChapter(1) : seekTo(audio.currentTime + 30); }
@@ -1432,20 +1432,38 @@ function currentSize() {
 }
 
 // ------------------------------------------------- books without a map yet
+// A book not voiced yet: its text to read now, with a note on voicing it above.
+async function openTextOnly() {
+  try {
+    R.map = await api(`/api/books/${bookId}/textmap`);
+  } catch {
+    return false;
+  }
+  R.textOnly = true;
+  document.body.classList.add("text-only");
+  buildText();
+  textEl.hidden = false;
+  needsRebuild("");
+  return true;
+}
+
 async function needsRebuild(message) {
   const status = $("#r-status");
-  $(".r-tools").hidden = true;  // nothing to read or mark yet
+  if (!R.textOnly) $(".r-tools").hidden = true;  // nothing to read or mark yet
+  status.classList.toggle("r-status-bar", Boolean(R.textOnly));
   const b = R.book;
   const audio = b.kind === "audio";
   const busy = ["queued", "voicing", "assembling", "checking", "parsing", "transcribing"].includes(b.status);
-  const rebuild = el("button", { type: "button", class: "primary", textContent: audio ? "Make Read along" : "Rebuild it now" });
+  const rebuild = el("button", { type: "button", class: "primary",
+    textContent: audio ? "Make Read along" : R.textOnly ? "Voice it now" : "Rebuild it now" });
   status.replaceChildren(
     el("h2", { textContent: busy ? (audio ? "Read along is being made" : "This book is being made")
-      : "Read along isn’t ready for this book" }),
+      : R.textOnly ? "Not voiced yet" : "Read along isn’t ready for this book" }),
     el("p", { textContent: busy
-      ? "Read along opens by itself when it’s done."
+      ? (R.textOnly ? "Read it here meanwhile. " : "") + "Read along opens by itself when it’s done."
       : audio ? "Whisper listens to the audiobook and writes down its text, with the time of every word. "
         + "Without a graphics card that takes a while; this page opens Read along by itself when it’s done."
+      : R.textOnly ? "Read it here now. Voice it to listen along, with every word lit up as it’s read."
       : `${message} A rebuild voices it again with the same voice and chapters, and records when each word is spoken.` }));
   if (!busy) {
     status.append(rebuild);
@@ -1501,7 +1519,8 @@ async function init() {
   try {
     ({ map: R.map, etag: R.etag } = await loadMap());
   } catch (err) {
-    needsRebuild(err.message);
+    // A book not voiced yet can still be read.
+    if (R.book.kind === "audio" || R.book.status === "done" || !await openTextOnly()) needsRebuild(err.message);
     return;
   }
   buildText();

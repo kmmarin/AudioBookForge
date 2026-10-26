@@ -149,6 +149,7 @@ TRANSCRIBE_GPU_GB = _float("TRANSCRIBE_GPU_GB", 0)
 
 # --- Book details lookup ------------------------------------------------------
 METADATA_LOOKUP = _bool("METADATA_LOOKUP", True)  # match new books online
+GUTENBERG = _bool("GUTENBERG", True)  # "Find a free book": search Project Gutenberg's catalog, add a book
 METADATA_SOURCES = [s.strip() for s in _env("METADATA_SOURCES", "openlibrary,audible,google").split(",")
                     if s.strip()]
 GOOGLE_BOOKS_API_KEY = _env("GOOGLE_BOOKS_API_KEY")  # Google is skipped without one

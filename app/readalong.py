@@ -114,6 +114,39 @@ def _align(text: str, marks: list, start: float, end: float) -> list[tuple[int, 
     return [(a, b, *times[n]) for n, (a, b, _) in enumerate(tokens)]
 
 
+def text_only(chapters: list[tuple[str, str]]) -> dict:
+    """The same map for a book with no audio yet, to read before it's voiced:
+    [(title, text)] of its turned-on chapters. Times are only an estimate from
+    the words (the reader orders by them; nothing plays)."""
+    from . import textprep
+    cs_per_word = 6000 / config.WORDS_PER_MINUTE
+    t, out_chapters = 0, []
+    for n, (title, text) in enumerate(chapters):
+        start, blocks, scene_break, para = t, [], False, 0
+        for pair in textprep.paragraph_pairs(text):
+            if pair is None:
+                scene_break = True
+                continue
+            shown = pair[0]
+            for a, b in _blocks(shown):
+                part = shown[a:b].strip()
+                flat = []
+                for m in WORD_RE.finditer(part):
+                    flat += [m.start(), m.end(), int(t), int(t + cs_per_word)]
+                    t += cs_per_word
+                if not flat:
+                    continue
+                block = {"p": para, "text": part, "t": [flat[2], flat[-1]], "w": flat}
+                if scene_break:
+                    block["brk"] = 1  # a scene break comes before this paragraph
+                    scene_break = False
+                blocks.append(block)
+            para += 1
+        out_chapters.append({"idx": n, "title": title, "start": int(start), "end": int(t),
+                             "heading": None, "blocks": blocks})
+    return {"v": VERSION, "duration": round(t / 100, 2), "text_only": True, "chapters": out_chapters}
+
+
 def build(book_id: str, chapters: list[dict], unit_paths: dict[int, list[Path]],
           unit_items: dict[int, list], unit_sources: dict[int, list],
           display: dict[int, list[str]], durations: list[float]) -> Path:

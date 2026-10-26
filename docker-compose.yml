@@ -43,6 +43,7 @@ x-forge: &forge
     AUDIBLE_REGION: ${AUDIBLE_REGION:-com}
     MATCH_MIN: ${MATCH_MIN:-0.8}
     MATCH_CLEAR: ${MATCH_CLEAR:-0.9}
+    GUTENBERG: ${GUTENBERG:-true}            # "Find a free book" (Project Gutenberg)
     PUBLISH_URL: ${PUBLISH_URL:-}
     PUBLISH_AUTO: ${PUBLISH_AUTO:-true}
     PUBLIC_URL: ${PUBLIC_URL:-}

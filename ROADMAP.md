@@ -33,6 +33,8 @@ finished; work in progress arrives on `next` first ([README](README.md#developme
 - The Whisper narration check, and **Redo** for chapters it flags.
 - Every voice a book is made in is kept; switching between them takes seconds.
 - Exports, under a small **⋯**: a book's audio, its text, and a voice you made, as a zip.
+- **Find a free book:** Project Gutenberg's public-domain books, searched in Forge and added with a click, within their terms of use.
+- A book not voiced yet can be read in the reader as text.
 
 **Read along**
 - Word-by-word highlighting, in any browser.
