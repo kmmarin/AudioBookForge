@@ -53,6 +53,7 @@ x-forge: &forge
     CLONE_URL: ${CLONE_URL:-}                # the clone server for cloned voices (docker-compose.clone.yml)
     CLONE_TOKEN: ${CLONE_TOKEN:-}            # blank = SHARE_TOKEN
     CLONE_LOCAL_URL: ${CLONE_LOCAL_URL:-}    # this machine's clone server as a fallback (installers set it)
+    CLONE_WORKERS: ${CLONE_WORKERS:-2}       # parts of a book sent to the clone server at once
     GPU_SHARE: ${GPU_SHARE:-auto}
     DEV_FAKE_TTS: ${DEV_FAKE_TTS:-false}
 
