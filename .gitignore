@@ -1,0 +1,11 @@
+data/
+output/
+voicelab-data/
+certs/
+.env
+https.env
+docker-compose.override.yml
+__pycache__/
+*.pyc
+*:Zone.Identifier
+dist/

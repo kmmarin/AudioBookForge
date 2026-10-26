@@ -1,0 +1,80 @@
+# Audiobook Forge
+#   docker compose up -d --build        then open http://<host>:8080
+# Settings can live in a .env file next to this one (see .env.example).
+
+x-forge: &forge
+  build:
+    context: .
+    args:
+      TORCH_VARIANT: ${TORCH_VARIANT:-cpu}
+      INSTALL_CALIBRE: ${INSTALL_CALIBRE:-false}
+  image: ${IMAGE:-audiobook-forge:latest}
+  restart: unless-stopped
+  init: true
+  volumes:
+    - ${DATA_DIR:-./data}:/data          # job state and working files (keep on local disk)
+    - ${OUTPUT_DIR:-./output}:/output    # finished audiobooks (NAS or Audiobookshelf library is fine)
+    - models:/models                     # downloaded voices and Whisper, kept across rebuilds
+  environment: &env
+    PUID: ${PUID:-1000}
+    PGID: ${PGID:-1000}
+    TZ: ${TZ:-UTC}
+    DEVICE: ${DEVICE:-cpu}
+    TTS_WORKERS: ${TTS_WORKERS:-}
+    TORCH_THREADS: ${TORCH_THREADS:-}
+    ENCODE_WORKERS: ${ENCODE_WORKERS:-}
+    BOOK_CONCURRENCY: ${BOOK_CONCURRENCY:-2}
+    UNIT_CHARS: ${UNIT_CHARS:-1800}
+    DEFAULT_FORMAT: ${DEFAULT_FORMAT:-m4b}
+    BITRATE: ${BITRATE:-64k}
+    NORMALIZE: ${NORMALIZE:-false}
+    OUTPUT_LAYOUT: ${OUTPUT_LAYOUT:-abs}
+    QA_DEFAULT: ${QA_DEFAULT:-true}
+    QA_SAMPLE: ${QA_SAMPLE:-0.25}
+    QA_FLAG_WER: ${QA_FLAG_WER:-0.12}
+    WHISPER_MODEL: ${WHISPER_MODEL:-base}
+    WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+    TRANSCRIBE_MODEL: ${TRANSCRIBE_MODEL:-small}
+    TRANSCRIBE_THREADS: ${TRANSCRIBE_THREADS:-}
+    TRANSCRIBE_BATCH: ${TRANSCRIBE_BATCH:-8}
+    METADATA_LOOKUP: ${METADATA_LOOKUP:-true}
+    METADATA_SOURCES: ${METADATA_SOURCES:-openlibrary,audible,google}
+    GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
+    AUDIBLE_REGION: ${AUDIBLE_REGION:-com}
+    MATCH_MIN: ${MATCH_MIN:-0.8}
+    MATCH_CLEAR: ${MATCH_CLEAR:-0.9}
+    PUBLISH_URL: ${PUBLISH_URL:-}
+    PUBLISH_AUTO: ${PUBLISH_AUTO:-true}
+    PUBLIC_URL: ${PUBLIC_URL:-}
+    SHARE_TOKEN: ${SHARE_TOKEN:-}
+    SITE_URL: ${SITE_URL:-}
+    VOICELAB_URL: ${VOICELAB_URL:-}
+    CLONE_URL: ${CLONE_URL:-}                # the clone server for cloned voices (docker-compose.clone.yml)
+    CLONE_TOKEN: ${CLONE_TOKEN:-}            # blank = SHARE_TOKEN
+    SCENE_WORDS: ${SCENE_WORDS:-75}          # Watch and read: words per picture
+    DRAW_STYLE: ${DRAW_STYLE:-sketch}
+    DRAW_MODEL: ${DRAW_MODEL:-dreamshaper-xl-lightning}
+    GPU_SHARE: ${GPU_SHARE:-auto}
+    DEV_FAKE_TTS: ${DEV_FAKE_TTS:-false}
+
+services:
+  web:
+    <<: *forge
+    ports:
+      - "${PORT:-8080}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    <<: *forge
+    command: ["python", "-m", "app.worker"]
+    stop_grace_period: 30s
+    depends_on:
+      web:
+        condition: service_started
+
+volumes:
+  models:

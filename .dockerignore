@@ -1,0 +1,9 @@
+data/
+output/
+voicelab-data/
+certs/
+https.env
+.git/
+**/__pycache__/
+*.pyc
+.env

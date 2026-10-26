@@ -1,0 +1,48 @@
+# Voices offered in the dropdown. Edit freely, then restart the containers.
+# To use your own copy without rebuilding, mount it and set VOICES_FILE.
+#
+# engine: kokoro  -> voice: Kokoro voice name, lang: Kokoro language code
+#   a = US English, b = UK English, e = Spanish, f = French, h = Hindi,
+#   i = Italian, j = Japanese, p = Brazilian Portuguese, z = Mandarin
+#   Full list: https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md
+#
+# engine: piper   -> model: a Piper voice id
+#   Full list: https://huggingface.co/rhasspy/piper-voices
+#
+# narrator: written into the file's narrator tag unless you type your own.
+#
+# moods (optional, Piper voices with several speakers): each book picks one.
+#   id: stored with the book, label: shown in the dropdown,
+#   speaker: the speaker's name in the model's speaker_id_map.
+#   The first mood is the default.
+
+default: kokoro-af_heart
+
+voices:
+  - {id: kokoro-af_heart,    label: "Heart (US, female)",     engine: kokoro, voice: af_heart,    lang: a, narrator: "Heart (Kokoro)"}
+  - {id: kokoro-af_bella,    label: "Bella (US, female)",     engine: kokoro, voice: af_bella,    lang: a, narrator: "Bella (Kokoro)"}
+  - {id: kokoro-af_nicole,   label: "Nicole (US, soft)",      engine: kokoro, voice: af_nicole,   lang: a, narrator: "Nicole (Kokoro)"}
+  - {id: kokoro-af_sarah,    label: "Sarah (US, female)",     engine: kokoro, voice: af_sarah,    lang: a, narrator: "Sarah (Kokoro)"}
+  - {id: kokoro-am_michael,  label: "Michael (US, male)",     engine: kokoro, voice: am_michael,  lang: a, narrator: "Michael (Kokoro)"}
+  - {id: kokoro-am_fenrir,   label: "Fenrir (US, male)",      engine: kokoro, voice: am_fenrir,   lang: a, narrator: "Fenrir (Kokoro)"}
+  - {id: kokoro-am_puck,     label: "Puck (US, male)",        engine: kokoro, voice: am_puck,     lang: a, narrator: "Puck (Kokoro)"}
+  - {id: kokoro-bf_emma,     label: "Emma (UK, female)",      engine: kokoro, voice: bf_emma,     lang: b, narrator: "Emma (Kokoro)"}
+  - {id: kokoro-bf_isabella, label: "Isabella (UK, female)",  engine: kokoro, voice: bf_isabella, lang: b, narrator: "Isabella (Kokoro)"}
+  - {id: kokoro-bm_george,   label: "George (UK, male)",      engine: kokoro, voice: bm_george,   lang: b, narrator: "George (Kokoro)"}
+  - {id: kokoro-bm_fable,    label: "Fable (UK, male)",       engine: kokoro, voice: bm_fable,    lang: b, narrator: "Fable (Kokoro)"}
+
+  - {id: piper-lessac,  label: "Lessac (US, female)",  engine: piper, model: en_US-lessac-high,    narrator: "Lessac (Piper)"}
+  - {id: piper-ryan,    label: "Ryan (US, male)",      engine: piper, model: en_US-ryan-high,      narrator: "Ryan (Piper)"}
+  - {id: piper-amy,     label: "Amy (US, female)",     engine: piper, model: en_US-amy-medium,     narrator: "Amy (Piper)"}
+  - {id: piper-alan,    label: "Alan (UK, male)",      engine: piper, model: en_GB-alan-medium,    narrator: "Alan (Piper)"}
+  - {id: piper-cori,    label: "Cori (UK, female)",    engine: piper, model: en_GB-cori-high,      narrator: "Cori (Piper)"}
+  - id: piper-semaine
+    label: "Semaine (UK, moods)"
+    engine: piper
+    model: en_GB-semaine-medium
+    narrator: "Semaine (Piper)"
+    moods:
+      - {id: even,   label: "Even-tempered", speaker: prudence}
+      - {id: happy,  label: "Happy",         speaker: poppy}
+      - {id: angry,  label: "Angry",         speaker: spike}
+      - {id: gloomy, label: "Gloomy",        speaker: obadiah}

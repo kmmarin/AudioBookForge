@@ -1,0 +1,28 @@
+# NVIDIA GPU override. Needs the NVIDIA Container Toolkit on the host.
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+services:
+  web:
+    build:
+      args:
+        TORCH_VARIANT: ${TORCH_VARIANT:-cu124}
+    image: ${IMAGE:-audiobook-forge:gpu}
+  # The web app needs no GPU: the worker voices samples on the models it has loaded.
+  worker:
+    build:
+      args:
+        TORCH_VARIANT: ${TORCH_VARIANT:-cu124}
+    image: ${IMAGE:-audiobook-forge:gpu}
+    environment:
+      DEVICE: cuda
+      # Blank = as many as fit in free video memory (see GPU_MEM_PER_WORKER_GB).
+      TTS_WORKERS: ${TTS_WORKERS:-}
+      GPU_MEM_PER_WORKER_GB: ${GPU_MEM_PER_WORKER_GB:-1.5}
+      GPU_RESERVE_GB: ${GPU_RESERVE_GB:-0.75}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cuda}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

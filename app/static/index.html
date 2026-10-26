@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audiobook Forge</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2318222D'/><g fill='%23E8A317'><rect x='6' y='14' width='3' height='8'/><rect x='11' y='9' width='3' height='13'/><rect x='16' y='12' width='3' height='10'/><rect x='21' y='7' width='3' height='15'/></g></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
+</head>
+<body>
+  <header class="top">
+    <h1 class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><g><rect x="4" y="15" width="4" height="9"/><rect x="10" y="9" width="4" height="15"/><rect x="16" y="12" width="4" height="12"/><rect x="22" y="6" width="4" height="18"/></g></svg>
+      Audiobook Forge
+    </h1>
+    <div class="top-right">
+      <p class="workers" id="workers"></p>
+      <a class="quiet create-voice" id="create-voice" href="/createvoice/" hidden
+         title="Train a new voice from a narrator’s recordings">Create a voice</a>
+      <button type="button" class="quiet theme" id="who" title="Who reads along: everyone keeps their own place">Listeners</button>
+      <button type="button" class="quiet theme" id="settings-btn" title="GPU servers for cloned voices and pictures">Settings</button>
+      <button type="button" class="quiet theme" id="theme">Light theme</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="drop" class="drop" aria-label="Add books">
+      <input type="file" id="file" multiple hidden>
+      <div>
+        <p class="drop-title">Drop books here to add them</p>
+        <p class="drop-sub" id="accept-list">EPUB, PDF, Word, plain text and more</p>
+      </div>
+      <button type="button" class="primary" id="pick">Choose files</button>
+    </section>
+
+    <section id="batch" class="batch" hidden>
+      <p id="count" class="count"></p>
+      <div class="field">
+        <label for="all-voice">Voice for all</label>
+        <select id="all-voice"></select>
+      </div>
+      <div class="field">
+        <label for="all-fmt">Format for all</label>
+        <select id="all-fmt"></select>
+      </div>
+      <div class="batch-actions">
+        <button type="button" class="quiet" id="clear-done">Clear finished</button>
+        <button type="button" class="primary" id="start-all">Start all ready</button>
+      </div>
+    </section>
+
+    <ol id="books" class="books"></ol>
+    <p id="empty" class="empty">No books yet. Add one or more files and each gets its own voice and format.</p>
+  </main>
+
+  <template id="row-tpl">
+    <li class="book">
+      <img class="cover" alt="" width="64" height="64">
+      <div class="info">
+        <h2 class="title"></h2>
+        <p class="byline"></p>
+        <div class="meter" role="img"></div>
+        <p class="status" aria-live="polite"></p>
+      </div>
+      <div class="controls">
+        <div class="field">
+          <label class="lbl-voice">Voice</label>
+          <div class="voice-pick">
+            <select class="voice"></select>
+            <button type="button" class="icon play" aria-label="Play a 15-second sample of this book in this voice">
+              <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>
+              <svg class="i-stop" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/></svg>
+            </button>
+            <button type="button" class="icon compare" aria-label="Compare every voice"
+                    title="Compare voices: the same 10-second passage in each">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h2m-2 4h2m-2 4h2M6 4h8M6 8h8m-8 4h8"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl-fmt">Format</label>
+          <select class="fmt"></select>
+        </div>
+        <div class="field mood-field" hidden>
+          <label class="lbl-mood">Mood</label>
+          <select class="mood"></select>
+        </div>
+        <p class="kind-note"><strong>Audiobook</strong> Its own narration. Whisper writes down the text for Read along.</p>
+      </div>
+      <div class="actions">
+        <button type="button" class="primary act"></button>
+        <a class="quiet download" hidden title="The file as it was last built">Download</a>
+        <a class="quiet read" hidden>Read along</a>
+        <button type="button" class="quiet send" hidden>Send to server</button>
+        <button type="button" class="quiet redo" hidden
+                title="Voice the chapters flagged as misread again, then rebuild the file">Redo misread</button>
+        <button type="button" class="quiet details">Details</button>
+        <button type="button" class="quiet update">Update info</button>
+        <button type="button" class="quiet danger remove">Remove</button>
+      </div>
+    </li>
+  </template>
+
+  <dialog id="details" class="sheet" aria-labelledby="d-heading">
+    <div class="sheet-head">
+      <h2 id="d-heading">Book details</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="busy-note" id="d-busy" hidden>This book is being voiced. Cancel it to make changes.</p>
+      <div class="d-top">
+        <figure class="d-cover">
+          <img id="d-cover" alt="Cover art">
+          <button type="button" class="quiet" id="d-cover-btn">Change cover</button>
+          <input type="file" id="d-cover-file" accept="image/*" hidden>
+          <button type="button" class="quiet" id="d-lookup">Look up details</button>
+        </figure>
+        <div class="d-fields">
+          <div class="field wide"><label for="m-title">Title</label><input id="m-title" data-meta="title"></div>
+          <div class="field"><label for="m-author">Author</label><input id="m-author" data-meta="author"></div>
+          <div class="field"><label for="m-narrator">Narrator</label><input id="m-narrator" data-meta="narrator"></div>
+          <div class="field"><label for="m-series">Series</label><input id="m-series" data-meta="series"></div>
+          <div class="field narrow"><label for="m-index">Number in series</label><input id="m-index" data-meta="series_index" inputmode="decimal"></div>
+          <div class="field narrow"><label for="m-year">Year</label><input id="m-year" data-meta="year" inputmode="numeric"></div>
+          <div class="field"><label for="m-genre">Genre</label><input id="m-genre" data-meta="genre"></div>
+          <div class="field"><label for="m-publisher">Publisher</label><input id="m-publisher" data-meta="publisher"></div>
+          <div class="field wide"><label for="m-desc">Description</label><textarea id="m-desc" data-meta="description" rows="3"></textarea></div>
+        </div>
+      </div>
+      <div class="d-opts">
+        <div class="field">
+          <label for="d-speed">Reading speed <output id="d-speed-out"></output></label>
+          <input type="range" id="d-speed" min="0.7" max="1.4" step="0.05">
+        </div>
+        <button type="button" class="quiet sample" id="d-sample" data-idle="Generate sample"
+                title="Hear 15 seconds of this book in its voice at this speed">Generate sample</button>
+        <label class="check"><input type="checkbox" id="d-qa"> Check the narration with Whisper and flag chapters that were misread</label>
+      </div>
+      <section class="d-versions" id="d-versions-box" hidden>
+        <h3>Voices made</h3>
+        <p class="hint">Every voice this book has been made in is kept, so switching back is instant. Name them if you like, and remove the ones you don’t need to free up space.</p>
+        <ol id="d-versions" class="versions"></ol>
+      </section>
+      <section class="d-places" id="d-places" hidden>
+        <h3>Listening</h3>
+        <ol id="d-place-list" class="places"></ol>
+      </section>
+      <div class="d-chapters-head">
+        <h3>Chapters</h3>
+        <p class="hint" id="d-chapters-hint">Turn off chapters that shouldn’t be read aloud, like copyright pages. Titles become the chapter markers.</p>
+      </div>
+      <ol id="d-chapters" class="chapters"></ol>
+    </div>
+    <div class="sheet-foot">
+      <button type="button" class="quiet danger" id="d-remove">Remove book</button>
+      <span class="grow"></span>
+      <button type="button" class="quiet" id="d-rebuild">Save and start</button>
+      <button type="button" class="primary" id="d-save">Save changes</button>
+    </div>
+  </dialog>
+
+  <dialog id="lookup" class="sheet" aria-labelledby="l-heading">
+    <div class="sheet-head">
+      <h2 id="l-heading">Look up details</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <form id="l-form" class="l-form">
+        <div class="field"><label for="l-title">Title</label><input id="l-title" required></div>
+        <div class="field"><label for="l-author">Author</label><input id="l-author"></div>
+        <button type="submit" class="primary" id="l-search">Search</button>
+      </form>
+      <p class="hint" id="l-status" aria-live="polite"></p>
+      <section id="l-cover-box" hidden>
+        <h3 class="l-head">Covers</h3>
+        <div id="l-covers" class="cover-grid"></div>
+      </section>
+      <h3 class="l-head" id="l-match-head" hidden>Matches</h3>
+      <ol id="l-results" class="matches"></ol>
+    </div>
+    <div class="sheet-foot">
+      <span class="grow"></span>
+      <button type="button" class="quiet" data-close>Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="compare" class="sheet" aria-labelledby="c-heading">
+    <div class="sheet-head">
+      <h2 id="c-heading">Compare voices</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint" id="c-status" aria-live="polite"></p>
+      <ol id="c-voices" class="voice-list"></ol>
+      <p class="make-voice" hidden><a href="/createvoice/">Make your own voice…</a></p>
+    </div>
+    <div class="sheet-foot">
+      <label class="check"><input type="checkbox" id="c-auto"> Play each clip as it’s ready</label>
+      <span class="grow"></span>
+      <button type="button" class="quiet" data-close>Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="editor" class="sheet" aria-labelledby="e-heading">
+    <div class="sheet-head">
+      <h2 id="e-heading">Edit chapter text</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint" id="e-hint">Fix misread words, remove footnotes, or spell names the way they should sound. Blank lines separate paragraphs; a line of * * * adds a pause.</p>
+      <textarea id="e-text" spellcheck="true"></textarea>
+    </div>
+    <div class="sheet-foot">
+      <span class="grow"></span>
+      <button type="button" class="quiet" data-close>Discard</button>
+      <button type="button" class="primary" id="e-save">Save text</button>
+    </div>
+  </dialog>
+
+  <dialog id="listeners" class="sheet listeners" aria-labelledby="w-heading">
+    <div class="sheet-head">
+      <h2 id="w-heading">Listeners</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint">Everyone who reads along keeps their own place and checkpoints in each book, on any device. Read along asks who’s listening the first time it opens on a device. The book list here shows how far this device’s listener has got.</p>
+      <ol id="w-list" class="w-list"></ol>
+      <form id="w-add" class="w-add">
+        <div class="field">
+          <label for="w-name">Add someone</label>
+          <input id="w-name" maxlength="40" autocomplete="off" placeholder="Their name">
+        </div>
+        <button type="submit" class="primary">Add</button>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="settings" class="sheet" aria-labelledby="s-heading">
+    <div class="sheet-head">
+      <h2 id="s-heading">Settings</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <h3 class="s-sub">GPU servers</h3>
+      <p class="hint">Machines running the clone server (<code>clone/</code>) speak cloned voices and draw Watch and read’s
+        pictures. Each job goes to the first server here that does it and is answering: one card can do the voices and
+        another the pictures, or one can stand in when another is off.</p>
+      <ol id="g-list" class="w-list g-list"></ol>
+      <p class="hint" id="g-where"></p>
+      <form id="g-form" class="g-form">
+        <h3 class="s-sub" id="g-form-title">Add a GPU server</h3>
+        <div class="g-fields">
+          <div class="field"><label for="g-name">Name</label><input id="g-name" maxlength="60" placeholder="gaming-pc" autocomplete="off"></div>
+          <div class="field"><label for="g-url">Address</label><input id="g-url" placeholder="http://192.168.1.30:8100" autocomplete="off"></div>
+          <div class="field"><label for="g-token">Token</label><input id="g-token" type="password" autocomplete="new-password" placeholder="Its CLONE_TOKEN"></div>
+        </div>
+        <div class="g-jobs" role="group" aria-label="Jobs">
+          <label><input type="checkbox" id="g-voices" checked> Voices</label>
+          <label><input type="checkbox" id="g-pictures" checked> Pictures</label>
+        </div>
+        <div class="g-actions">
+          <p class="hint g-result" id="g-result" role="status"></p>
+          <button type="button" class="quiet" id="g-test">Test it</button>
+          <button type="button" class="quiet" id="g-cancel" hidden>Cancel</button>
+          <button type="submit" class="primary" id="g-save">Add</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

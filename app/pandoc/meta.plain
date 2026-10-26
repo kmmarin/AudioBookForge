@@ -1,0 +1,9 @@
+@@META title=$title$
+@@META author=$for(author)$$author$$sep$ & $endfor$
+@@META date=$date$
+@@META language=$lang$
+@@META description=$description$$abstract$
+@@META genre=$subject$
+@@META publisher=$publisher$
+@@BODY@@
+$body$

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Read along</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2318222D'/><g fill='%23E8A317'><rect x='6' y='14' width='3' height='8'/><rect x='11' y='9' width='3' height='13'/><rect x='16' y='12' width='3' height='10'/><rect x='21' y='7' width='3' height='15'/></g></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/read.css">
+  <script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
+</head>
+<body class="reader">
+  <header class="r-top">
+    <a class="icon r-back" href="/" aria-label="Back to your books" title="Back to your books">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none"/></svg>
+    </a>
+    <div class="r-heading">
+      <p class="r-book" id="r-book">Read along</p>
+      <p class="r-chapter" id="r-chapter"></p>
+    </div>
+    <div class="r-tools">
+      <button type="button" class="r-who-btn" id="r-who-btn" title="Who’s listening" hidden>
+        <span class="r-avatar" id="r-who-initial" aria-hidden="true"></span>
+        <span class="r-who-name" id="r-who-name"></span>
+      </button>
+      <button type="button" class="icon r-tool" id="r-smaller" aria-label="Smaller text" title="Smaller text">A<small>−</small></button>
+      <button type="button" class="icon r-tool" id="r-bigger" aria-label="Bigger text" title="Bigger text">A<small>+</small></button>
+      <button type="button" class="icon r-tool" id="r-watch-btn" aria-pressed="false" aria-haspopup="true"
+              aria-label="Watch and read: pictures of the story" title="Watch and read: pictures of the story">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none"/><path d="M4 11l2.8-3.3 2.4 2.3 1.6-1.6 1.7 2.6" fill="none"/><circle cx="10.6" cy="5.8" r="1" stroke="none"/></svg>
+      </button>
+      <button type="button" class="icon r-tool" id="r-theme" aria-label="Switch light or dark" title="Switch light or dark">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 0 0 11z" stroke="none"/><circle cx="8" cy="8" r="5.5" fill="none"/></svg>
+      </button>
+      <button type="button" class="quiet r-marks-btn" id="r-voice-btn" title="Change the voice">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="6" y="2" width="4" height="8" rx="2" fill="none"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5V14" fill="none"/></svg>
+        Voice
+      </button>
+      <button type="button" class="quiet r-marks-btn" id="r-marks">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h8v11l-4-3-4 3z" fill="none"/></svg>
+        Checkpoints
+      </button>
+    </div>
+  </header>
+
+  <div class="r-sleep-menu r-watch-menu" id="r-watch-menu" role="menu" hidden>
+    <p class="r-menu-title">Pictures of the story</p>
+    <button type="button" role="menuitemradio" data-watch="off">Off</button>
+    <button type="button" role="menuitemradio" data-watch="above">Above the text</button>
+    <button type="button" role="menuitemradio" data-watch="full">Full page, like SeeStory</button>
+    <p class="r-menu-credit">The full page view comes from
+      <a href="https://github.com/pgotta/SeeStory" target="_blank" rel="noopener">SeeStory</a> by pgotta.</p>
+  </div>
+
+  <section class="r-watch paused" id="r-watch" aria-label="Pictures of the story" hidden>
+    <img class="r-watch-img" id="r-watch-a" alt="">
+    <img class="r-watch-img" id="r-watch-b" alt="">
+    <p class="r-watch-caption" id="r-watch-caption" aria-hidden="true"></p>
+    <div class="r-watch-note" id="r-watch-note" hidden>
+      <p id="r-watch-msg"></p>
+      <button type="button" class="primary" id="r-watch-make" hidden>Draw the pictures</button>
+    </div>
+    <p class="r-watch-progress" id="r-watch-progress" role="status" hidden></p>
+  </section>
+
+  <div class="r-revoice" id="r-revoice" role="status" hidden>
+    <span id="r-revoice-text"></span>
+    <div class="r-revoice-bar"><i id="r-revoice-fill"></i></div>
+  </div>
+
+  <main class="r-main">
+    <div id="r-status" class="r-status">Loading the book</div>
+    <div id="r-text" class="r-text" hidden>
+      <div id="r-pill" class="r-pill" aria-hidden="true"></div>
+      <div id="r-pill-tail" class="r-pill r-snap" aria-hidden="true"></div>
+    </div>
+  </main>
+
+  <div id="r-resume" class="r-resume" role="status" hidden>
+    <div class="r-resume-text">
+      <p class="r-resume-title">Pick up where you left off</p>
+      <p class="r-resume-where" id="r-resume-where"></p>
+    </div>
+    <button type="button" class="primary" id="r-resume-go">Continue</button>
+    <button type="button" class="quiet" id="r-resume-start">Start over</button>
+  </div>
+
+  <button type="button" class="r-follow" id="r-follow" hidden>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10m-4-4l4 4 4-4" fill="none"/></svg>
+    Back to the reading spot
+  </button>
+
+  <footer class="r-player" id="r-player" hidden>
+    <div class="r-scrub" id="r-scrub">
+      <div class="r-track"><div class="r-fill" id="r-fill"></div><div class="r-ticks" id="r-ticks"></div></div>
+      <input type="range" id="r-seek" min="0" max="1" step="0.1" value="0" aria-label="Position in the book">
+      <div class="r-peek" id="r-peek" hidden></div>
+    </div>
+    <div class="r-times">
+      <span id="r-now">0:00</span>
+      <span id="r-ch-left"></span>
+      <span id="r-total">0:00</span>
+    </div>
+    <div class="r-controls">
+      <button type="button" class="r-btn r-sleep" id="r-sleep" aria-haspopup="true" title="Sleep timer">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 10.5A5.5 5.5 0 0 1 5.5 3.5a5.5 5.5 0 1 0 7 7z"/></svg>
+        <span id="r-sleep-label">Sleep</span>
+      </button>
+      <button type="button" class="r-btn" id="r-prev-ch" aria-label="Previous chapter" title="Previous chapter">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 3v10" fill="none"/><path d="M13 3v10L6 8z" stroke="none"/></svg>
+      </button>
+      <button type="button" class="r-btn r-skip" id="r-back" aria-label="Back 15 seconds" title="Back 15 seconds">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.1-5" fill="none"/><path d="M4 3.5v4.2h4.2" fill="none"/></svg>
+        <span>15</span>
+      </button>
+      <button type="button" class="r-play" id="r-play" aria-label="Play">
+        <svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10l8.5-5z"/></svg>
+        <svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="3" height="10" rx="0.8"/><rect x="9" y="3" width="3" height="10" rx="0.8"/></svg>
+      </button>
+      <button type="button" class="r-btn r-skip" id="r-fwd" aria-label="Forward 30 seconds" title="Forward 30 seconds">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5" fill="none"/><path d="M20 3.5v4.2h-4.2" fill="none"/></svg>
+        <span>30</span>
+      </button>
+      <button type="button" class="r-btn" id="r-next-ch" aria-label="Next chapter" title="Next chapter">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12 3v10" fill="none"/><path d="M3 3v10l7-5z" stroke="none"/></svg>
+      </button>
+      <div class="r-speeds" role="group" aria-label="Playback speed">
+        <button type="button" class="r-btn r-step" id="r-slower" aria-label="Slower" title="Slower">−</button>
+        <button type="button" class="r-btn r-speed" id="r-speed" title="Playback speed">1×</button>
+        <button type="button" class="r-btn r-step" id="r-faster" aria-label="Faster" title="Faster">+</button>
+      </div>
+    </div>
+    <div class="r-sleep-menu" id="r-sleep-menu" role="menu" hidden>
+      <p class="r-menu-title">Stop playing after</p>
+      <button type="button" role="menuitem" data-min="10">10 minutes</button>
+      <button type="button" role="menuitem" data-min="20">20 minutes</button>
+      <button type="button" role="menuitem" data-min="30">30 minutes</button>
+      <button type="button" role="menuitem" data-min="45">45 minutes</button>
+      <button type="button" role="menuitem" data-min="60">1 hour</button>
+      <button type="button" role="menuitem" data-min="chapter">End of this chapter</button>
+      <button type="button" role="menuitem" data-min="off" id="r-sleep-off">Turn off the timer</button>
+    </div>
+  </footer>
+
+  <dialog id="r-panel" class="sheet r-sheet" aria-labelledby="r-panel-title">
+    <div class="sheet-head">
+      <h2 id="r-panel-title">Checkpoints</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint">A checkpoint is saved every 5 minutes you listen, at each new chapter and when a sleep timer starts. If you dozed off, find the last part you remember and go back to it.</p>
+      <button type="button" class="primary" id="r-add-mark">Add a checkpoint here</button>
+      <ol id="r-mark-list" class="r-mark-list"></ol>
+    </div>
+  </dialog>
+
+  <dialog id="r-voice" class="sheet r-sheet" aria-labelledby="r-voice-title">
+    <div class="sheet-head">
+      <h2 id="r-voice-title">Change the voice</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint">Hear a few seconds of this book in each voice. Pick one and the book is voiced again: you keep listening meanwhile, and the new voice carries on from the same word when it’s ready.</p>
+      <div class="busy-note" id="r-voice-offline" hidden>
+        <p id="r-voice-offline-text"></p>
+        <button type="button" class="quiet" id="r-voice-here">Voice it here instead</button>
+      </div>
+      <ol id="r-voice-list" class="voice-list"></ol>
+      <p class="make-voice" hidden><a href="/createvoice/">Make your own voice…</a></p>
+    </div>
+  </dialog>
+
+  <dialog id="r-who" class="sheet r-sheet r-who" aria-labelledby="r-who-title">
+    <div class="sheet-head">
+      <h2 id="r-who-title">Who’s listening?</h2>
+      <button type="button" class="icon close" id="r-who-close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <p class="hint">Everyone keeps their own place and checkpoints. This device remembers who you pick.</p>
+      <ol id="r-who-list" class="r-who-list"></ol>
+      <button type="button" class="r-who-pick r-who-new" id="r-who-new">
+        <span class="r-avatar" aria-hidden="true">+</span>
+        <span>Add someone</span>
+      </button>
+      <form id="r-who-add" class="r-who-add" hidden>
+        <label for="r-who-input">Their name</label>
+        <div class="r-who-row">
+          <input id="r-who-input" maxlength="40" autocomplete="off" enterkeyhint="done" required>
+          <button type="submit" class="primary">Add</button>
+        </div>
+        <p class="r-who-error" id="r-who-error" role="alert" hidden></p>
+      </form>
+    </div>
+  </dialog>
+
+  <div id="r-toast" class="toast" role="status" aria-live="polite"></div>
+  <audio id="r-audio" preload="metadata"></audio>
+  <script src="/static/read.js"></script>
+</body>
+</html>

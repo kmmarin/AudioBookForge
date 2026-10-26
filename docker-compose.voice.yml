@@ -1,0 +1,66 @@
+# Voice creator: trains new Piper voices from recordings of a narrator, on the
+# GPU, and puts them in Forge's voice list. Forge shows "Create a voice" and
+# passes /createvoice through to it. For the PC with the NVIDIA GPU:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.voice.yml up -d --build
+# (deploy/wsl-deploy.sh adds it when .env has VOICELAB=true.)
+# Forge and the voice creator take turns on the GPU (app/gpushare.py): training
+# waits while Forge is voicing, and Forge pauses new books while a voice trains.
+services:
+  web:
+    environment:
+      VOICELAB_URL: ${VOICELAB_URL:-http://voicelab:8000}
+
+  worker:
+    environment:
+      GPU_SHARE: ${GPU_SHARE:-auto}
+
+  voicelab:
+    build:
+      context: .
+      dockerfile: voicelab/Dockerfile
+      args:
+        TORCH_VARIANT: ${VOICELAB_TORCH_VARIANT:-cu124}
+    image: ${VOICELAB_IMAGE:-audiobook-forge-voicelab:gpu}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s  # training lets go of the GPU on the way out
+    shm_size: 2gb  # training's data loaders pass audio batches through /dev/shm (Docker's default is 64 MB)
+    volumes:
+      - ${VOICELAB_DATA_DIR:-./voicelab-data}:/labdata  # uploads, clips and checkpoints (can be large)
+      - models:/models  # shared with Forge: finished voices, the GPU turn file, Whisper
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+      TRAIN_DEVICE: ${TRAIN_DEVICE:-cuda}
+      GPU_SHARE: ${GPU_SHARE:-auto}
+      LAB_THREADS: ${LAB_THREADS:-}
+      LAB_WHISPER_MODEL: ${LAB_WHISPER_MODEL:-small}
+      # Hearing the recordings on the GPU is ~20x faster than on the CPU (where a
+      # long book takes hours); it takes its turn on the GPU like training does.
+      LAB_WHISPER_DEVICE: ${LAB_WHISPER_DEVICE:-cuda}
+      TRAIN_BATCH: ${TRAIN_BATCH:-}
+      TRAIN_PRECISION: ${TRAIN_PRECISION:-32-true}
+      TRAIN_MAX_BATCHES: ${TRAIN_MAX_BATCHES:-40000}
+      TRAIN_MIN_BATCHES: ${TRAIN_MIN_BATCHES:-4500}  # no stopping by itself before this many steps
+      ALONG_KEEP: ${ALONG_KEEP:-12}  # voices kept from the latest checks, to pick by ear
+      TRAIN_MIN_FREE_GB: ${TRAIN_MIN_FREE_GB:-3.5}
+      GPU_RESERVE_GB: ${GPU_RESERVE_GB:-0.75}
+      # Cloned voices (Qwen3-TTS, no training) come from a clone server, on this
+      # PC or one with a bigger GPU. Empty CLONE_URL: voices are trained with Piper.
+      # CLONE_TOKEN defaults to SHARE_TOKEN.
+      CLONE_URL: ${CLONE_URL:-}
+      CLONE_TOKEN: ${CLONE_TOKEN:-}
+      SHARE_TOKEN: ${SHARE_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/createvoice/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

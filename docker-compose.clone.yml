@@ -1,0 +1,40 @@
+# The clone server alone, for a machine with a GPU big enough for Qwen3-TTS
+# (it can be a different PC from Forge's):
+#   docker compose -f docker-compose.clone.yml up -d --build
+# Forge and the voice creator reach it at CLONE_URL=http://<this machine>:8100,
+# with the same CLONE_TOKEN in both .env files. See clone/README.md.
+services:
+  clone:
+    build: ./clone
+    image: ${CLONE_IMAGE:-audiobook-forge-clone:gpu}
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${CLONE_PORT:-8100}:8100"
+    volumes:
+      - clone-hf:/hf  # the Qwen3-TTS models (about 7 GB for both sizes)
+      - clone-data:/data  # reference clips sent by Forge and the voice creator
+    environment:
+      TZ: ${TZ:-UTC}
+      CLONE_TOKEN: ${CLONE_TOKEN:-}
+      CLONE_IDLE_SECONDS: ${CLONE_IDLE_SECONDS:-300}  # let go of the GPU after this long without work
+      CLONE_BATCH: ${CLONE_BATCH:-}  # sentences generated at once; blank = by video memory
+      CLONE_GPU_SHARE: ${CLONE_GPU_SHARE:-0.9}  # most of the video memory it may use
+      CLONE_DTYPE: ${CLONE_DTYPE:-}  # blank: bfloat16 on RTX 30xx and newer, else float32
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  clone-hf:
+  clone-data:

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create a voice</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2318222D'/><g fill='%23E8A317'><rect x='6' y='14' width='3' height='8'/><rect x='11' y='9' width='3' height='13'/><rect x='16' y='12' width='3' height='10'/><rect x='21' y='7' width='3' height='15'/></g></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="static/app.css">
+  <link rel="stylesheet" href="static/lab.css">
+  <script>try { if (localStorage.getItem("theme") === "light") document.documentElement.dataset.theme = "light"; } catch (e) {}</script>
+</head>
+<body>
+  <header class="top">
+    <h1 class="brand">
+      <a href="/" title="Back to your books">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><g><rect x="4" y="15" width="4" height="9"/><rect x="10" y="9" width="4" height="15"/><rect x="16" y="12" width="4" height="12"/><rect x="22" y="6" width="4" height="18"/></g></svg>
+        Audiobook Forge
+      </a>
+      <span class="brand-sub">Create a voice</span>
+    </h1>
+    <div class="top-right">
+      <p class="workers" id="gpu-line"></p>
+      <a class="quiet back-link" href="/">Back to your books</a>
+      <button type="button" class="quiet theme" id="theme">Light theme</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Every voice project, and a way to start one -->
+    <section id="home">
+      <section class="lab-card new-voice" aria-labelledby="new-head">
+        <h2 class="lab-h2 first" id="new-head">Make a new voice</h2>
+        <div class="field name-field">
+          <label for="new-name">Name this voice</label>
+          <input id="new-name" maxlength="80" placeholder="e.g. Grandpa reading" autocomplete="off">
+          <p class="hint name-note">The name Forge lists it under. Leave it empty to have the narrator’s name found in the recordings, for you to check.</p>
+        </div>
+        <section id="drop-new" class="drop" aria-label="Recordings for the new voice">
+          <input type="file" id="file-new" multiple hidden accept="audio/*,.m4b,.m4a,.mka,.opus">
+          <div>
+            <p class="drop-title">Drop recordings of the narrator here</p>
+            <p class="drop-sub">Anything from a few minutes to a whole audiobook: one big M4B or MP3, or all its parts at once. FLAC, WAV and more work too. The clips of the narrator speaking clearly are picked out, and the voice is made from them.</p>
+          </div>
+          <div class="drop-actions">
+            <button type="button" class="primary" id="pick-new">Choose files</button>
+            <button type="button" class="quiet" id="new-empty">Start without files</button>
+          </div>
+        </section>
+        <label class="check auto-check"><input type="checkbox" id="new-auto" checked> Make the voice as soon as the audio is ready</label>
+      </section>
+      <h2 class="lab-h2" id="projects-head" hidden>Voices in the making</h2>
+      <ol id="projects" class="projects"></ol>
+      <h2 class="lab-h2" id="voices-head" hidden>Your voices in Forge</h2>
+      <ol id="voices" class="voice-rows"></ol>
+    </section>
+
+    <!-- One voice project -->
+    <section id="project" hidden>
+      <p class="crumbs"><a href="#" id="to-home">All voices</a></p>
+
+      <div class="lab-card name-card">
+        <div class="field name-field">
+          <label for="p-name">Name this voice</label>
+          <input id="p-name" maxlength="80" placeholder="e.g. Grandpa reading" autocomplete="off">
+          <p class="hint name-note" id="p-name-note">This is the name Forge lists the voice under.</p>
+        </div>
+        <div class="field accent-field">
+          <label for="p-accent">Accent</label>
+          <select id="p-accent"></select>
+        </div>
+        <div class="field model-field">
+          <label for="p-model">Model</label>
+          <select id="p-model"></select>
+          <p class="hint" id="p-model-note"></p>
+        </div>
+        <label class="check auto-check" id="p-auto-box"><input type="checkbox" id="p-auto"> <span id="p-auto-text">Make the voice as soon as the audio is ready</span></label>
+      </div>
+
+      <div class="lab-card">
+        <div class="card-head">
+          <h3>Recordings</h3>
+          <button type="button" class="quiet small" id="stop-listening" hidden
+                  title="Skip the rest of the recordings and make the report from what’s been heard">Use what’s been heard</button>
+        </div>
+        <section id="drop-more" class="drop drop-small" aria-label="Add recordings">
+          <input type="file" id="file-more" multiple hidden accept="audio/*,.m4b,.m4a,.mka,.opus">
+          <p class="drop-sub" id="drop-more-text">Drop more recordings of the same narrator here, or</p>
+          <button type="button" class="quiet" id="pick-more">Choose files</button>
+        </section>
+        <ol id="p-sources" class="sources"></ol>
+        <p class="status-line" id="p-status" aria-live="polite"></p>
+      </div>
+
+      <div class="lab-card" id="ready-card" hidden>
+        <div class="card-head">
+          <h3>Is it enough?</h3>
+          <span class="badge" id="r-badge"></span>
+        </div>
+        <p class="ready-lead" id="r-lead"></p>
+        <div class="tiers" id="r-tiers" role="img"></div>
+        <div class="tier-labels" aria-hidden="true"><span>Not enough</span><span>Usable</span><span>Good</span><span>Great</span></div>
+        <ul class="advice" id="r-advice"></ul>
+        <div class="facts">
+          <div class="fact"><p class="fact-label">Sound coverage</p><p class="fact-value" id="r-coverage"></p><p class="fact-note" id="r-coverage-note"></p></div>
+          <div class="fact"><p class="fact-label">Speaker</p><p class="fact-value" id="r-speaker"></p><p class="fact-note" id="r-speaker-note"></p></div>
+          <div class="fact"><p class="fact-label">Training uses</p><p class="fact-value" id="r-train"></p><p class="fact-note" id="r-train-note"></p></div>
+        </div>
+        <h4 class="sub-h">Where the audio went</h4>
+        <div class="spread" id="r-spread" role="img"></div>
+        <ol class="legend" id="r-legend"></ol>
+      </div>
+
+      <div class="lab-card" id="clone-card" hidden>
+        <div class="card-head">
+          <h3>Cloned voice</h3>
+          <span class="badge" id="cl-badge" hidden></span>
+        </div>
+        <p class="status-line" id="cl-status" aria-live="polite"></p>
+        <p class="hint" id="cl-hint" hidden>Each sample is the same passage, cloned from a different clip of the narrator. Play their clip, then the sample. Pick the one that sounds most like them: only that one goes into Forge.</p>
+        <ol class="voice-rows clone-rows" id="cl-rows"></ol>
+        <div class="row-actions">
+          <button type="button" class="primary" id="cl-make">Make samples</button>
+        </div>
+      </div>
+
+      <div class="lab-card" id="train-card" hidden>
+        <div class="card-head">
+          <h3>Training</h3>
+          <span class="badge" id="t-badge" hidden></span>
+        </div>
+        <p class="status-line" id="t-status" aria-live="polite"></p>
+        <div class="progress" id="t-progress" hidden><i></i></div>
+        <svg class="spark" id="t-spark" viewBox="0 0 300 60" preserveAspectRatio="none" hidden aria-label="Validation loss over training"></svg>
+        <p class="hint" id="t-hint"></p>
+        <h4 class="sub-h" id="t-along-head" hidden>Listen as it trains</h4>
+        <p class="hint" id="t-along-hint" hidden>The same passage at each check, newest first. Like one best? Use it, and it goes into Forge as this voice.</p>
+        <ol class="voice-rows along" id="t-along"></ol>
+        <div class="row-actions">
+          <button type="button" class="primary" id="t-start">Train this voice</button>
+          <button type="button" class="quiet" id="t-teach" hidden
+                  title="A new round where the cloned voice reads the narrator’s sentences and Piper learns from that clean audio, not the recordings. Makes a voice that needs no GPU.">Learn from the cloned voice</button>
+          <button type="button" class="quiet" id="t-stop" hidden>Stop training</button>
+        </div>
+      </div>
+
+      <div class="lab-card" id="quality-card" hidden>
+        <div class="card-head">
+          <h3>How it turned out</h3>
+          <span class="badge" id="q-badge"></span>
+        </div>
+        <p class="ready-lead" id="q-text"></p>
+        <div class="facts" id="q-facts"></div>
+        <h4 class="sub-h" id="q-rows-head">The same sentences, side by side</h4>
+        <p class="hint" id="q-rows-hint">None of these were used for training.</p>
+        <ol class="q-rows" id="q-rows"></ol>
+      </div>
+
+      <div class="lab-card" id="voice-card" hidden>
+        <div class="card-head"><h3>In Forge</h3></div>
+        <p id="v-text"></p>
+        <div class="row-actions">
+          <a class="quiet" href="/" id="v-open">Open Forge</a>
+          <button type="button" class="quiet danger" id="v-remove">Remove from Forge</button>
+        </div>
+      </div>
+
+      <div class="row-actions end">
+        <button type="button" class="quiet danger" id="p-remove">Remove this project</button>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="confirm" class="sheet small-sheet" aria-labelledby="c-title">
+    <div class="sheet-head">
+      <h2 id="c-title">Are you sure?</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body"><p id="c-text"></p></div>
+    <div class="sheet-foot">
+      <span class="grow"></span>
+      <button type="button" class="quiet" data-close>Keep it</button>
+      <button type="button" class="primary danger-fill" id="c-yes">Remove</button>
+    </div>
+  </dialog>
+
+  <dialog id="rename" class="sheet small-sheet" aria-labelledby="n-title">
+    <div class="sheet-head">
+      <h2 id="n-title">Rename voice</h2>
+      <button type="button" class="icon close" data-close aria-label="Close">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9l-9 9"/></svg>
+      </button>
+    </div>
+    <form class="sheet-body" id="n-form" method="dialog">
+      <div class="field"><label for="n-name">Name</label><input id="n-name" maxlength="80" required></div>
+    </form>
+    <div class="sheet-foot">
+      <span class="grow"></span>
+      <button type="button" class="quiet" data-close>Cancel</button>
+      <button type="submit" class="primary" form="n-form" id="n-save">Save name</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="static/lab.js"></script>
+</body>
+</html>
