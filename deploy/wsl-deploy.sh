@@ -128,6 +128,8 @@ if $GPU; then
     files+=(-f docker-compose.clone.yml)
     services+=(clone)
     grep -qE '^CLONE_URL=.+' .env || set_env CLONE_URL http://clone:8100
+    # Its port is open to other machines too (another Forge may use this card): never without a token.
+    grep -qE '^CLONE_TOKEN=.+' .env || set_env CLONE_TOKEN "$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
     grep -qE '^CLONE_GPU_SHARE=.+' .env || set_env CLONE_GPU_SHARE 0.6
     grep -qE '^CLONE_BATCH=.+' .env || set_env CLONE_BATCH 8
     echo "Clone server: on, on this GPU (cloned voices and pictures)"
