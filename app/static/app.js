@@ -328,10 +328,14 @@ function updateRow(row, b) {
   download.title = current ? `The copy in ${current.label}` : "The file as it was last made";
   // Once a book is on the server, Read along opens there: one place per book
   // for every device.
+  // A book not voiced yet can be read already; Read along comes once it's voiced.
   const read = $(".read", row);
-  read.hidden = b.status !== "done";
+  const textOnly = b.status !== "done" && !audio && b.status !== "parsing" && b.chapters.some((c) => c.include && c.words);
+  read.hidden = b.status !== "done" && !textOnly;
+  read.textContent = textOnly ? "Read" : "Read along";
   read.href = b.read_url || `/read/${b.id}`;
-  read.title = b.read_url ? `Opens on ${S.cfg.publish_host}, where your place is kept for every device`
+  read.title = textOnly ? "Read the text now. Voice it to listen along."
+    : b.read_url ? `Opens on ${S.cfg.publish_host}, where your place is kept for every device`
     : b.readalong ? "Listen while the text follows along"
     : "Made before Read along existed: open it to rebuild with word timings";
   const send = $(".send", row);

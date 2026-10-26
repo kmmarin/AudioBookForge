@@ -906,6 +906,21 @@ def get_readalong(book_id: str, request: Request):
     return Response(gzip.decompress(cached[1]), media_type="application/json", headers=headers)
 
 
+@app.get("/api/books/{book_id}/textmap")
+def get_text_map(book_id: str):
+    """A book's text in the reader's shape, before it has audio: read it now, voice it later."""
+    book = require_book(book_id)
+    chapters = []
+    for c in db.chapters(book_id):
+        path = book_dir(book_id) / "text" / f"{c['idx']:04d}.txt"
+        if c["include"] and path.exists():
+            chapters.append((c["title"], path.read_text(encoding="utf-8")))
+    doc = readalong.text_only(chapters)
+    if not any(c["blocks"] for c in doc["chapters"]):
+        raise HTTPException(404, "This book has no text to show yet.")
+    return doc
+
+
 class ProgressBody(BaseModel):
     chapter: int
     offset: float

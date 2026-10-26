@@ -177,6 +177,20 @@
 }
 .r-status h2 { color: var(--ink); font-size: 20px; margin: 0 0 8px; }
 .r-status .primary { margin-top: 16px; }
+/* Text only (not voiced yet): a short note above the text instead of a page of its own. */
+.r-status.r-status-bar {
+  margin: 8px auto 28px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: left;
+  font-size: 14px;
+}
+.r-status.r-status-bar h2 { font-size: 16px; margin: 0 0 4px; }
+.r-status.r-status-bar p { margin: 0; }
+.r-status.r-status-bar .primary { margin-top: 10px; }
+.reader.text-only #r-watch-btn, .reader.text-only #r-voice-btn,
+.reader.text-only #r-marks, .reader.text-only #r-who-btn { display: none !important; }
 .r-text {
   position: relative;
   max-width: var(--r-measure);
