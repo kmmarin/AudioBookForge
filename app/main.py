@@ -735,6 +735,37 @@ def download(book_id: str, v: str | None = None):
     return FileResponse(path, filename=name, media_type="application/octet-stream")
 
 
+def _attachment(name: str) -> dict:
+    """A download's Content-Disposition, as FileResponse writes it (names beyond ASCII too)."""
+    from urllib.parse import quote
+    name = name.replace("/", "-").replace("\\", "-")
+    quoted = quote(name)
+    return {"Content-Disposition": f"attachment; filename*=utf-8''{quoted}" if quoted != name
+            else f'attachment; filename="{name}"'}
+
+
+@app.get("/api/books/{book_id}/text")
+def export_text(book_id: str):
+    """The book's text as one plain-text file: the chapters read aloud, each under its title."""
+    book = require_book(book_id)
+    title = book["meta"].get("title") or Path(book["filename"]).stem
+    head = title + (f"\nby {book['meta']['author']}" if book["meta"].get("author") else "")
+    parts = []
+    for c in db.chapters(book_id):
+        path = book_dir(book_id) / "text" / f"{c['idx']:04d}.txt"
+        text = path.read_text(encoding="utf-8").strip() if c["include"] and path.exists() else ""
+        if text:
+            first = text.split("\n", 1)[0].strip()
+            # Most chapters start with their own heading; the rest get their title on top.
+            parts.append(text if not c["title"] or first.lower() == c["title"].strip().lower()
+                         else f"{c['title']}\n\n{text}")
+    if not parts:
+        raise HTTPException(404, "This book has no text yet." if book["kind"] == "audio"
+                            else "Every chapter is turned off, so there’s no text to export.")
+    return Response("\n\n\n".join([head, *parts]) + "\n", media_type="text/plain; charset=utf-8",
+                    headers=_attachment(f"{title}.txt"))
+
+
 def _kept(book_id: str, version_id: str) -> tuple[dict, dict]:
     book = require_book(book_id)
     kept = db.get_version(book_id, version_id)
@@ -1164,6 +1195,59 @@ def delete_cloned_voice(slug: str, request: Request):
     (folder / "voice.json").unlink(missing_ok=True)  # first: it stops being listed
     shutil.rmtree(folder, ignore_errors=True)
     return {"ok": True}
+
+
+VOICE_EXPORTS = {
+    "piper": ("Piper voice",
+              "{model} is the voice and {model}.json its settings: keep the two together.\n"
+              "- In another Audiobook Forge: put both in its custom-voices folder (/models/custom-voices).\n"
+              "  It lists the voice without a restart.\n"
+              "- Piper (https://github.com/OHF-Voice/piper1-gpl) reads with it like any other voice:\n"
+              "  give it the .onnx file as the model. It runs on any CPU."),
+    "kokoro": ("Kokoro voice",
+               "{model} is a voicepack for Kokoro-82M and {model}.json its settings: keep the two together.\n"
+               "- In another Audiobook Forge: put both in its custom-voices folder (/models/custom-voices).\n"
+               "  It lists the voice without a restart.\n"
+               "- Kokoro (https://github.com/hexgrad/kokoro) loads the .pt file as a voice."),
+    "clone": ("cloned voice",
+              "A voice for Qwen3-TTS: ref.wav is a clip of the narrator, ref.txt the words said in it,\n"
+              "and voice.json the model it was picked with.\n"
+              "- In another Audiobook Forge: put the {model} folder in its cloned-voices folder\n"
+              "  (/models/cloned-voices). It needs a GPU server, in Settings.\n"
+              "- Qwen3-TTS (https://github.com/QwenLM/Qwen3-TTS) clones it from ref.wav and ref.txt."),
+}
+
+
+@app.get("/api/voices/{voice_id}/export")
+def export_voice(voice_id: str):
+    """A voice made with the voice creator as a zip: its files as Forge keeps them, and how to use them."""
+    import tempfile
+    import zipfile
+    from starlette.background import BackgroundTask
+    voice = voices.get(voice_id)
+    if not voice or voice.get("group") != voices.CUSTOM_GROUP:
+        raise HTTPException(404, "Only voices made with the voice creator can be exported.")
+    if voice["engine"] == "clone":
+        folder = Path(voice["ref_audio"]).parent
+        model, files = folder.name, [(folder / n, f"{folder.name}/{n}") for n in voices.CLONED_FILES]
+    else:
+        path = Path(voice["model"] if voice["engine"] == "piper" else voice["voice"])
+        model, files = path.name, [(path, path.name), (path.with_name(path.name + ".json"), path.name + ".json")]
+    kind, how = VOICE_EXPORTS[voice["engine"]]
+    readme = (f"{voice['narrator']}: a {kind} made with Audiobook Forge's voice creator.\n\n"
+              + how.format(model=model)
+              + f"\n\nIt was made from recordings of {voice['narrator']}. Share it only with their permission.\n")
+    fd, tmp = tempfile.mkstemp(suffix=".zip")
+    try:
+        with os.fdopen(fd, "wb") as f, zipfile.ZipFile(f, "w") as z:
+            z.writestr("README.txt", readme, zipfile.ZIP_DEFLATED)
+            for path, name in files:  # models hardly compress: stored as they are
+                z.write(path, name, zipfile.ZIP_STORED if path.suffix in (".onnx", ".pt") else zipfile.ZIP_DEFLATED)
+    except FileNotFoundError:
+        os.unlink(tmp)
+        raise HTTPException(404, "That voice was just removed or replaced. Try again.")
+    return FileResponse(tmp, filename=f"{voice['narrator']} ({kind}).zip".replace("/", "-"),
+                        media_type="application/zip", background=BackgroundTask(os.unlink, tmp))
 
 
 @app.post("/api/import")

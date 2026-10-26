@@ -52,6 +52,7 @@ model is downloaded at first use from the project that publishes it (see
 | **Speed** | Chapters are cut into small units that every worker voices in parallel, longest first, and several books share the workers. Units are cached under a hash of voice, speed and text, so a restart, a cancel or a text edit only re-voices what changed. Runs on the CPU, or on an NVIDIA GPU. |
 | **Narration check** | Whisper transcribes a sample of every chapter and compares it with the text. A misread chapter is flagged, and **Redo** voices only the flagged chapters again. |
 | **Versions** | Each voice a book has been made in is kept. Switching back to one takes seconds, and Read along changes voice on the same word. |
+| **Exports** | The small **⋯** under a book's buttons downloads its audio, its text as one plain-text file, and the voice it's read in, if you made that voice. In **Compare voices**, each voice you made has its own **⋯**. |
 
 ### Read along
 
@@ -131,6 +132,9 @@ of them, such as audiobooks they read.
      reads books on any CPU.
 5. **You pick by ear.** Nothing goes into Forge's voice list until you choose
    **Use this one**.
+6. **Take it elsewhere if you like.** **⋯ → Voice** downloads a zip of its
+   files, with a README on using them in another Forge or with Piper, Kokoro
+   or Qwen3-TTS.
 
 > **Use voices responsibly.** Only clone or train a voice you have the right
 > to use, and don't publish a voice made from someone's recordings without
