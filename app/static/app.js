@@ -1429,6 +1429,56 @@ function wireSettings() {
   });
 }
 
+// ---------------------------------------------------------- free books
+// Project Gutenberg: the server searches its own copy of their catalog, and
+// fetches one book per press of Add.
+function wireFree() {
+  const dialog = $("#free"), status = $("#f-status"), list = $("#f-results");
+  $("#free-btn").hidden = !S.cfg.gutenberg;
+  let token = 0;
+  const search = async () => {
+    const q = $("#f-q").value.trim();
+    const mine = ++token;
+    status.textContent = q ? "Searching…" : "";
+    try {
+      const res = await api(`/api/gutenberg?${new URLSearchParams({ q, lang: $("#f-lang").value })}`);
+      if (mine !== token) return;
+      if (!res.ready) {
+        status.textContent = res.error || "Downloading Project Gutenberg’s catalog (about 20 MB, once a week). Searching starts in a moment…";
+        if (!res.error) setTimeout(() => { if (dialog.open && mine === token) search(); }, 3000);
+        return;
+      }
+      list.replaceChildren(...res.results.map(freeRow));
+      status.textContent = !q ? `${res.books.toLocaleString()} books. Type a title or an author.`
+        : res.results.length ? `${res.results.length === 40 ? "The first 40" : res.results.length} found.`
+        : "Nothing found. Try fewer words, or another language.";
+    } catch (err) { if (mine === token) status.textContent = err.message; }
+  };
+  $("#free-btn").addEventListener("click", () => { dialog.showModal(); $("#f-q").focus(); search(); });
+  $("#f-form").addEventListener("submit", (e) => { e.preventDefault(); search(); });
+  $("#f-lang").addEventListener("change", search);
+}
+
+function freeRow(b) {
+  const add = el("button", { type: "button", class: "quiet", textContent: "Add" });
+  const link = el("a", { href: b.url, target: "_blank", rel: "noopener", textContent: "Project Gutenberg page" });
+  const meta = el("p", { class: "v-meta" }, [b.author, b.language.toUpperCase()].filter(Boolean).join(" · ") + " · ", link);
+  add.addEventListener("click", async () => {
+    add.disabled = true;
+    add.textContent = "Adding";
+    try {
+      await api(`/api/gutenberg/${b.id}`, { method: "POST" });
+      add.textContent = "Added";
+      toast(`Added “${b.title}”. Its chapters appear in your list as it’s read.`);
+    } catch (err) {
+      add.disabled = false;
+      add.textContent = "Add";
+      fail(err);
+    }
+  });
+  return el("li", {}, el("div", {}, el("p", { class: "v-name", textContent: b.title }), meta), add);
+}
+
 (async function init() {
   try {
     S.cfg = await api("/api/config");
@@ -1442,6 +1492,7 @@ function wireSettings() {
   wireStatic();
   wireListeners();
   wireSettings();
+  wireFree();
   await loadListeners();
   render(await api(`/api/books${listenerQuery()}`));
   connect();

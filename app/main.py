@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import (audiofile, config, covers, db, gpus, listeners, lookup, parsers, previews, publish, readalong,
+from . import (audiofile, config, covers, db, gpus, gutenberg, listeners, lookup, parsers, previews, publish, readalong,
                scenes, textprep, transcript, versions, voices)
 
 BUSY = {"voicing", "assembling", "checking", "transcribing"}
@@ -335,6 +335,7 @@ def get_config():
         "publish_host": _host(publish.site_url() or config.PUBLISH_URL) or None,
         "site_url": config.SITE_URL or None,
         "voicelab": bool(config.VOICELAB_URL),  # shows "Create a voice", even while it's offline
+        "gutenberg": config.GUTENBERG,  # "Find a free book"
     }
 
 
@@ -395,6 +396,39 @@ async def upload_books(files: list[UploadFile] = File(...)):
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     return {"ids": created}
+
+
+# Free books from Project Gutenberg (gutenberg.py keeps to its terms of use).
+
+def _gutenberg_on() -> None:
+    if not config.GUTENBERG:
+        raise HTTPException(404, "Finding free books is turned off (GUTENBERG=false).")
+
+
+@app.get("/api/gutenberg")
+def gutenberg_search(q: str = "", lang: str = "en"):
+    """Searches the downloaded catalog only; the first search starts its download."""
+    _gutenberg_on()
+    gutenberg.refresh()
+    st = gutenberg.state()
+    return {**st, "results": gutenberg.search(q, lang) if st["ready"] and q.strip() else []}
+
+
+@app.post("/api/gutenberg/{pg_id}")
+async def gutenberg_add(pg_id: int):
+    """One book, on a press of Add: checked public domain in the USA, then added like an upload."""
+    _gutenberg_on()
+    try:
+        filename, data = await asyncio.to_thread(gutenberg.fetch, pg_id)
+    except gutenberg.GutenbergError as exc:
+        raise HTTPException(409, str(exc))
+    book_id = uuid.uuid4().hex[:12]
+    folder = config.BOOKS_DIR / book_id
+    folder.mkdir(parents=True)
+    (folder / "source.epub").write_bytes(data)
+    db.create_book(book_id, filename, voices.default_id(), config.DEFAULT_FORMAT, config.QA_DEFAULT)
+    parse_pool.submit(parse_book, book_id)
+    return {"id": book_id, "filename": filename}
 
 
 class ChapterPatch(BaseModel):
