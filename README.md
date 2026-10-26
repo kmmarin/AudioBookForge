@@ -44,7 +44,7 @@ model is downloaded at first use from the project that publishes it (see
 
 | | |
 |---|---|
-| **Formats in** | EPUB, PDF (with a text layer), TXT (Project Gutenberg aware), DOCX, ODT, RTF, HTML, Markdown, FB2, reStructuredText, Org, LaTeX and more through pandoc, DOC through antiword. MOBI, AZW3 and other Kindle formats with `INSTALL_CALIBRE=true` (no DRM). |
+| **Formats in** | EPUB, PDF (with a text layer), TXT (Project Gutenberg aware), DOCX, ODT, RTF, HTML, Markdown, FB2, reStructuredText, Org, LaTeX and more through pandoc, DOC through antiword. MOBI, AZW3 and other Kindle formats through Calibre (no DRM). |
 | **Chapters** | Found from the table of contents, PDF bookmarks or headings. Front and back matter (copyright, contents, "also by") is turned off by default. Every chapter can be renamed, turned on or off, and its text edited. |
 | **Book details** | Title, author, series, number, year, cover and more are read from the file. Missing details can be looked up online: Open Library, Audible, and Google Books with a free API key. Each result is scored against the file, and you pick when it's unclear. |
 | **Voices** | 11 Kokoro voices and 6 Piper voices (US and UK English), one with several moods, plus voices you make. Voice, mood and speed are set per book or for many at once. **Compare voices** plays the same saved 10-second passage in each. |
@@ -207,18 +207,19 @@ A card with 16 GB, such as an RTX 4070 Ti Super, runs all of it:
 2. In that folder, run:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File deploy\windows-converter.ps1 -VoiceCreator -CloneServer -OpenPort
+   powershell -ExecutionPolicy Bypass -File deploy\windows-converter.ps1 -OpenPort
    ```
 3. It asks for a server to send books to: leave it blank to keep everything on
    this machine.
 4. Open `http://<this PC>:8080`.
 
-**On Linux,** set these in `.env`, then run `./install.sh`:
+**On Linux,** just run `./install.sh`.
 
-```ini
-VOICELAB=true
-CLONE_LOCAL=true
-```
+**What's included:** everything is on by default.
+- The voice creator runs wherever there's an NVIDIA GPU.
+- The clone server runs beside Forge on a card of 12 GB or more (`CLONE_LOCAL=auto`).
+- To leave either out, pass `-NoVoiceCreator` or `-NoCloneServer`, or set
+  `VOICELAB=false` or `CLONE_LOCAL=false` in `.env`.
 
 The first start downloads several GB. The models for cloned voices (about
 7 GB) and pictures (about 7 GB) download the first time each is used.
@@ -276,10 +277,10 @@ No Windows? The converter can be any Linux machine with an NVIDIA GPU. Set
 
 ## Making voices
 
-Turn the voice creator on where the NVIDIA GPU is (the converter): answer
-yes in `windows-converter.ps1`, or set `VOICELAB=true` in `.env` and deploy
-with `deploy/wsl-deploy.sh` (it adds `docker-compose.voice.yml`). Forge's
-header then shows **Create a voice**.
+The voice creator is on wherever there's an NVIDIA GPU (the converter):
+`windows-converter.ps1`, `wsl-deploy.sh` and `install.sh` add it there, and
+leave it out on machines without one. Forge's header then shows
+**Create a voice**.
 
 Forge and the voice creator take turns on the GPU (`app/gpushare.py`). Voicing
 a book always goes first: training pauses, saves its place, and carries on
@@ -311,27 +312,39 @@ sides. If `CLONE_TOKEN` is blank, `SHARE_TOKEN` is used.
 | Qwen3-TTS 1.7B, the best | about 7 GB / 10 GB |
 | Qwen3-TTS 0.6B | about 3 GB / 5.5 GB |
 
-**NVIDIA, with Docker:**
+**Setting one up takes one line** on the GPU machine. It downloads what it
+needs, starts the server, and ends by showing the **address** and **token** to
+paste into Forge's **Settings → GPU servers**. Running it again updates the
+server and keeps its token.
 
-```bash
-docker compose -f docker-compose.clone.yml up -d --build
-```
+- **Windows, natively (NVIDIA, or AMD Radeon RX 5000–9000):** no WSL or Docker,
+  and it starts with Windows. In PowerShell as administrator:
 
-On a Windows PC with an NVIDIA GPU, `deploy/clone-setup.sh` does the same
-inside WSL.
+  ```powershell
+  irm https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.ps1 | iex
+  ```
+- **Windows with WSL and Docker (NVIDIA):** it installs WSL if it's missing,
+  and opens the port to other machines. In PowerShell as administrator:
 
-**AMD Radeon on Windows (no WSL or Docker),** through AMD's ROCm builds of
-PyTorch for Windows. On an RX 6800 the 1.7B model reads at about 3.8 times
-real time. In PowerShell, from `clone\windows\`:
+  ```powershell
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.ps1))) -Mode wsl
+  ```
+- **Linux with Docker (NVIDIA):** it installs Docker and NVIDIA's container
+  toolkit if they're missing:
 
-```powershell
-.\setup.ps1                                  # Python, PyTorch for the card and qwen-tts, under D:\forge-clone
-Get-Content token.txt | .\save-token.ps1     # the token Forge uses
-.\start.ps1                                  # or, in an admin PowerShell: .\install-autostart.ps1 (starts at boot)
-```
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.sh | sudo bash
+  ```
+- **The same machine as Forge:** with an NVIDIA card of 12 GB or more, Forge's
+  installer runs it alongside by itself (`CLONE_LOCAL=auto`).
 
-Use `stop.ps1` to stop it: forcing the process to end while it's working
-can leave the GPU driver stuck until a restart.
+From a copy of the project, the same scripts are `deploy\gpu-server.ps1` and
+`deploy/gpu-server.sh`. On an RX 6800, the 1.7B voice model reads at about 3.8
+times real time.
+
+On Windows, use `C:\forge-clone\server\stop.ps1` to stop it: forcing the
+process to end while it's working can leave the GPU driver stuck until a
+restart.
 
 **Several GPU servers: Settings.** Forge's **Settings** lists every clone
 server, whether each is answering and on which GPU, and the jobs each does:
@@ -386,11 +399,12 @@ The main ones:
 | `TRANSCRIBE_MODEL` | small | Whisper model for Read along of audiobooks you add (`base` is about 3x faster) |
 | `METADATA_LOOKUP` | true | Look books up online |
 | `PUBLISH_URL`, `PUBLIC_URL`, `SHARE_TOKEN` | | The server and converter link |
-| `VOICELAB`, `VOICELAB_URL` | false | The voice creator, here or on another machine |
+| `VOICELAB`, `VOICELAB_URL` | true | The voice creator, wherever there's an NVIDIA GPU, or reached on another machine |
 | `CLONE_URL`, `CLONE_TOKEN` | | A clone server for cloned voices and pictures (more in Settings) |
-| `CLONE_LOCAL` | false | Run the clone server beside Forge on this machine's GPU |
+| `CLONE_LOCAL` | auto | The clone server beside Forge: auto = on an NVIDIA card of 12 GB or more |
 | `SCENE_WORDS`, `DRAW_STYLE` | 75, sketch | Watch and read: words per picture, and the drawing style |
-| `INSTALL_CALIBRE` | false | Kindle and other legacy formats (a bigger image) |
+| `NORMALIZE` | true | Every book at the same loudness (EBU R128) |
+| `INSTALL_CALIBRE` | true | Kindle and other older ebook formats (false: an image about 700 MB smaller) |
 | `DEV_FAKE_TTS` | false | Tones instead of speech: tests the whole pipeline in seconds |
 
 The stock voice list is [app/voices.yaml](app/voices.yaml). Add any Kokoro or

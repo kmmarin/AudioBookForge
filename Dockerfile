@@ -33,7 +33,7 @@ RUN if [ "$TORCH_VARIANT" != "cpu" ]; then \
     fi
 # true adds Calibre for Kindle (.mobi .azw3) and other legacy ebook formats (~600 MB).
 # Declared here, after the Python layers, so changing it doesn't download torch again.
-ARG INSTALL_CALIBRE=false
+ARG INSTALL_CALIBRE=true
 RUN if [ "$INSTALL_CALIBRE" = "true" ]; then \
       apt-get update && apt-get install -y --no-install-recommends calibre \
       && rm -rf /var/lib/apt/lists/*; \

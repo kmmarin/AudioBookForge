@@ -107,8 +107,8 @@ services=(worker)
 if $GPU; then
   files+=(-f docker-compose.gpu.yml)
   echo "GPU: $( (/usr/lib/wsl/lib/nvidia-smi -L 2>/dev/null || nvidia-smi -L) | head -n1)"
-  # The voice creator (VOICELAB=true in .env) trains voices on the GPU, taking turns with Forge.
-  if grep -qE '^VOICELAB=true' .env; then
+  # The voice creator trains voices on the GPU, taking turns with Forge (VOICELAB=false: never).
+  if ! grep -qE '^VOICELAB=false' .env; then
     files+=(-f docker-compose.voice.yml)
     services+=(voicelab)
     mkdir -p voicelab-data
@@ -116,8 +116,15 @@ if $GPU; then
   fi
   # The clone server (cloned voices, Watch and read's pictures) on this GPU too:
   # Forge and the voice creator reach it by name, and it takes a smaller share of
-  # the card, which it now shares with them.
-  if grep -qE '^CLONE_LOCAL=true' .env; then
+  # the card, which it now shares with them. CLONE_LOCAL=auto (the default): on a
+  # card with 12 GB or more.
+  clone_local=$(sed -n 's/^CLONE_LOCAL=//p' .env | tail -n1)
+  if [[ ${clone_local:-auto} == auto ]]; then
+    mib=$( (/usr/lib/wsl/lib/nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null ||
+            nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits) | head -n1 | tr -dc 0-9)
+    clone_local=$([[ ${mib:-0} -ge 11500 ]] && echo true || echo false)
+  fi
+  if [[ $clone_local == true ]]; then
     files+=(-f docker-compose.clone.yml)
     services+=(clone)
     grep -qE '^CLONE_URL=.+' .env || set_env CLONE_URL http://clone:8100

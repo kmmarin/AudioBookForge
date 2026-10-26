@@ -1,43 +1,72 @@
 # Set this Windows PC up as a GPU server for Audiobook Forge: the clone server,
 # which speaks cloned voices and draws Watch and read's pictures for every Forge
-# that lists it in Settings → GPU servers. Two ways:
+# that lists it in Settings → GPU servers. One line, in PowerShell as administrator:
 #
-#   -Mode windows   natively, with PyTorch for the card: NVIDIA or AMD Radeon.
-#                   No WSL or Docker; it starts by itself when Windows does.
-#   -Mode wsl       in WSL 2 with Docker: NVIDIA only.
+#   irm https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.ps1 | iex
 #
-# In an admin PowerShell, from the project folder:
+# That installs it natively (no WSL or Docker): PyTorch for the card, NVIDIA or
+# AMD Radeon, starting with Windows. In WSL 2 with Docker instead (NVIDIA only):
 #
-#   powershell -ExecutionPolicy Bypass -File deploy\gpu-server.ps1 -Mode windows -Token <token>
+#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.ps1))) -Mode wsl
 #
-# The token is the one Forge's Settings page shows when you add a server (any
-# long random text; the same on both sides). Without -Token one is made and
-# printed. Run it again to update; the models it has downloaded are kept.
+# It ends by showing the address and token to paste into Forge's Settings. Run
+# it again to update: the token and the downloaded models are kept. From a copy
+# of the project, the same: deploy\gpu-server.ps1 [-Mode wsl] [-Token <token>].
 param(
     [ValidateSet("windows", "wsl")][string]$Mode = "windows",
     [string]$Token,
     [int]$Port = 8100,
     [string]$Root = "C:\forge-clone",   # -Mode windows: where it's installed
-    [string]$Distro = "Ubuntu"          # -Mode wsl
+    [string]$Distro = "Ubuntu",         # -Mode wsl
+    [string]$Branch = "main"            # which version to download, when run as a one-liner
 )
 $ErrorActionPreference = "Stop"
 $env:WSL_UTF8 = "1"
 function Say($text) { Write-Host "`n==> $text" -ForegroundColor Cyan }
-function Fail($text) { Write-Host "`nError: $text" -ForegroundColor Red; exit 1 }
+function Fail($text) {
+    Write-Host "`nError: $text" -ForegroundColor Red
+    if (-not $PSScriptRoot) { throw $text }  # a one-liner: exit would close the window too
+    exit 1
+}
 
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) { Fail "Run this in a PowerShell opened with Run as administrator." }
-$project = Split-Path -Parent $PSScriptRoot
-if (-not (Test-Path (Join-Path $project "clone\server.py"))) { Fail "Run this from the Audiobook Forge folder." }
+
+# Run as a one-liner there's no project around this script: download it, then run its copy.
+$project = if ($PSScriptRoot) { Split-Path -Parent $PSScriptRoot } else { "" }
+if (-not $project -or -not (Test-Path (Join-Path $project "clone\server.py"))) {
+    $src = Join-Path $env:ProgramData "AudiobookForge\src"
+    Say "Downloading Audiobook Forge ($Branch) to $src"
+    $zip = Join-Path $env:TEMP "audiobookforge-$Branch.zip"
+    $unpack = Join-Path $env:TEMP "audiobookforge-$Branch"
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -UseBasicParsing "https://github.com/kmmarin/AudioBookForge/archive/refs/heads/$Branch.zip" -OutFile $zip
+    if (Test-Path $unpack) { Remove-Item -Recurse -Force $unpack }
+    Expand-Archive $zip -DestinationPath $unpack
+    if (Test-Path $src) { Remove-Item -Recurse -Force $src }
+    New-Item -ItemType Directory -Force (Split-Path $src) | Out-Null
+    Move-Item (Get-ChildItem $unpack -Directory | Select-Object -First 1).FullName $src
+    Remove-Item -Force $zip; Remove-Item -Recurse -Force $unpack
+    $again = @{ Mode = $Mode; Port = $Port; Root = $Root; Distro = $Distro }
+    if ($Token) { $again.Token = $Token }
+    & (Join-Path $src "deploy\gpu-server.ps1") @again
+    return  # not exit: run as a one-liner, that would close the window with the address and token in it
+}
 if ($Port -ne 8100 -and $Mode -eq "windows") { Fail "The Windows install listens on port 8100." }
 
-$made = $false
+# The token: given, or the one this server already has (an update keeps it), or a new one.
+if (-not $Token) {
+    if ($Mode -eq "windows" -and (Test-Path "$Root\server\token.txt")) {
+        try { $Token = (Get-Content "$Root\server\token.txt" -Raw).Trim() } catch {}
+    } elseif ($Mode -eq "wsl") {
+        $Token = (& wsl.exe -d $Distro -u root -- sh -c "sed -n 's/^CLONE_TOKEN=//p' /opt/audiobook-forge-clone/.env 2>/dev/null | tail -n1" 2>$null) -join ""
+    }
+}
 if (-not $Token) {
     $bytes = New-Object byte[] 24
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $Token = -join ($bytes | ForEach-Object { $_.ToString("x2") })
-    $made = $true
 }
 $Token = $Token -replace '[^\x21-\x7E]', ''
 $route = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue | Sort-Object RouteMetric | Select-Object -First 1
@@ -46,7 +75,6 @@ $ip = if ($route) { (Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex -Add
 if ($Mode -eq "windows") {
     Say "Installing the clone server under $Root (Python, PyTorch for the card, the models' code)"
     & (Join-Path $project "clone\windows\setup.ps1") -Root $Root
-    if ($LASTEXITCODE) { Fail "The install didn't finish (see above)." }
     Say "Saving the token"
     $Token | & powershell -NoProfile -ExecutionPolicy Bypass -File "$Root\server\save-token.ps1"
     Say "Starting it with Windows"
@@ -92,8 +120,8 @@ if (-not $health) { Fail "It didn't answer on port $Port. Windows: see $Root\ser
 Write-Host ("Running on: {0}{1}" -f $(if ($health.gpu) { $health.gpu } else { "the CPU (no GPU found: very slow)" }),
     $(if ($health.gpu_gb) { ", $($health.gpu_gb) GB" }))
 
-Say "Done. In Forge, open Settings → GPU servers → Add a GPU server:"
-Write-Host "  Address: http://$(if ($ip) { $ip } else { '<this PC>' }):$Port"
-Write-Host "  Token:   $(if ($made) { $Token } else { '(the one you gave)' })"
-if ($made) { Write-Host "  (Keep the token: it's also saved on this PC, readable only by this account and the startup task.)" }
+Write-Host ""
+Write-Host "Done. In Forge, open Settings > GPU servers > Add a GPU server, and paste:" -ForegroundColor Green
+Write-Host "  Address: http://$(if ($ip) { $ip } else { '<this PC>' }):$Port" -ForegroundColor Green
+Write-Host "  Token:   $Token" -ForegroundColor Green
 Write-Host "Give this PC a fixed address (a DHCP reservation) so Forge keeps finding it."

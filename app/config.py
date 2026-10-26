@@ -125,7 +125,7 @@ DEV_FAKE_TTS = _bool("DEV_FAKE_TTS", False)  # tones instead of speech, for test
 DEFAULT_FORMAT = _env("DEFAULT_FORMAT", "m4b")
 BITRATE = _env("BITRATE", "64k")
 OPUS_BITRATE = _env("OPUS_BITRATE", "32k")
-NORMALIZE = _bool("NORMALIZE", False)  # EBU R128 loudness; slower
+NORMALIZE = _bool("NORMALIZE", True)  # EBU R128 loudness: every book at one volume; a little slower
 OUTPUT_LAYOUT = _env("OUTPUT_LAYOUT", "abs")  # abs (Author/Series/Title/) | flat
 
 # --- Whisper narration check --------------------------------------------------
