@@ -153,28 +153,46 @@ def _call(method: str, path: str, timeout: float = 30):
         return json.loads(r.read() or b"null")
 
 
+SENT_VOICES = config.MODELS_DIR / "sent-voices.json"  # the voices this PC has put on its server
+
+
+def _sent() -> dict:
+    """{"server": PUBLISH_URL, "custom": [slugs], "cloned": [slugs]}: what this PC
+    sent, so it removes only those. Several PCs can feed one server, and each
+    keeps its hands off the others' voices."""
+    try:
+        data = json.loads(SENT_VOICES.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    if data.get("server") != config.PUBLISH_URL:  # another server: nothing sent there yet
+        data = {"server": config.PUBLISH_URL}
+    return data
+
+
 def sync_voices() -> tuple[int, int]:
     """Keep the server's copy of the voices made here in step: send new,
-    retrained, renamed or newly measured ones, and remove deleted ones. Then
-    they can be picked on the server too (a book is still voiced here).
+    retrained, renamed or newly measured ones, and remove the ones deleted here
+    (only voices this PC sent: another PC's stay). Then they can be picked on
+    the server too (a book is still voiced on the PC that made it).
     Returns (sent, removed)."""
     import hashlib
     if not config.PUBLISH_URL:
         return 0, 0
+    mine = _sent()
     local = {meta.with_suffix("").stem: meta for kind in ("onnx", "pt")  # Piper voices and Kokoro voicepacks
              for meta in config.CUSTOM_VOICES_DIR.glob(f"*.{kind}.json") if meta.with_suffix("").exists()}
     remote = _call("GET", "/api/custom-voices") or {}
     sent = removed = 0
     for slug, meta in sorted(local.items()):
         data = meta.read_bytes()
-        if (remote.get(slug) or {}).get("config") == hashlib.sha1(data).hexdigest():
-            continue
-        _post_multipart(f"{config.PUBLISH_URL}/api/custom-voices/{slug}", {},
-                        {"voice_config": (meta.name, data), "model": (meta.with_suffix("").name, meta.with_suffix(""))})
-        sent += 1
-    for slug in sorted(remote.keys() - local.keys()):
+        if (remote.get(slug) or {}).get("config") != hashlib.sha1(data).hexdigest():
+            _post_multipart(f"{config.PUBLISH_URL}/api/custom-voices/{slug}", {},
+                            {"voice_config": (meta.name, data), "model": (meta.with_suffix("").name, meta.with_suffix(""))})
+            sent += 1
+    for slug in sorted((remote.keys() - local.keys()) & set(mine.get("custom") or [])):
         _call("DELETE", f"/api/custom-voices/{slug}")
         removed += 1
+    mine["custom"] = sorted(local)
     # Cloned voices: their clip, its text and settings, a few hundred KB each.
     from .voices import CLONED_FILES, cloned_fingerprint
     folders = [p for p in config.CLONED_VOICES_DIR.iterdir() if p.is_dir()] if config.CLONED_VOICES_DIR.is_dir() else []
@@ -188,9 +206,12 @@ def sync_voices() -> tuple[int, int]:
                          "ref_text": ("ref.txt", (folder / "ref.txt").read_bytes()),
                          "ref_audio": ("ref.wav", folder / "ref.wav")})
         sent += 1
-    for slug in sorted(remote.keys() - cloned.keys()):
+    for slug in sorted((remote.keys() - cloned.keys()) & set(mine.get("cloned") or [])):
         _call("DELETE", f"/api/cloned-voices/{slug}")
         removed += 1
+    mine["cloned"] = sorted(cloned)
+    SENT_VOICES.parent.mkdir(parents=True, exist_ok=True)
+    SENT_VOICES.write_text(json.dumps(mine, indent=1), encoding="utf-8")
     if sent or removed:
         log.info("Voices on %s: %d sent, %d removed", config.PUBLISH_URL, sent, removed)
     return sent, removed
