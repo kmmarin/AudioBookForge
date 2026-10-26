@@ -23,13 +23,19 @@ files=(-f docker-compose.yml)
 if command -v nvidia-smi >/dev/null 2>&1 && docker info 2>/dev/null | grep -qi nvidia; then
   echo "NVIDIA GPU found; using the GPU build."
   files+=(-f docker-compose.gpu.yml)
-  # The voice creator and the clone server on this GPU too, when .env asks for them.
-  if grep -qE '^VOICELAB=true' .env; then
+  # The voice creator (unless VOICELAB=false) and the clone server on this GPU too:
+  # CLONE_LOCAL=auto (the default) runs it on a card with 12 GB or more.
+  if ! grep -qE '^VOICELAB=false' .env; then
     files+=(-f docker-compose.voice.yml)
     mkdir -p voicelab-data
     echo "Voice creator: on."
   fi
-  if grep -qE '^CLONE_LOCAL=true' .env; then
+  clone_local=$(sed -n 's/^CLONE_LOCAL=//p' .env | tail -n1)
+  if [ "${clone_local:-auto}" = auto ]; then
+    mib=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -n1 | tr -dc 0-9)
+    clone_local=$([ "${mib:-0}" -ge 11500 ] && echo true || echo false)
+  fi
+  if [ "$clone_local" = true ]; then
     files+=(-f docker-compose.clone.yml)
     grep -qE '^CLONE_URL=.+' .env || sed -i 's|^CLONE_URL=.*|CLONE_URL=http://clone:8100|' .env
     grep -qE '^CLONE_GPU_SHARE=' .env || echo "CLONE_GPU_SHARE=0.6" >> .env

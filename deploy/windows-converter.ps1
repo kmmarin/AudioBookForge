@@ -20,9 +20,11 @@
 # still voice cloned voices: see clone/windows/ for the clone server.
 param(
     [string]$Server,            # the always-on Forge, e.g. http://192.168.1.10:8080 ("none": keep books here)
-    [switch]$VoiceCreator,      # train voices here too (needs the NVIDIA GPU)
-    [switch]$CloneServer,       # run the clone server here too: cloned voices and pictures (12 GB+ GPU)
-    [string]$CloneUrl,          # or use one on another machine, e.g. http://192.168.1.30:8100
+    [switch]$VoiceCreator,      # (on by default where there's an NVIDIA GPU)
+    [switch]$NoVoiceCreator,    # leave the voice creator out
+    [switch]$CloneServer,       # run the clone server here even on a card under 12 GB
+    [switch]$NoCloneServer,     # never run it here (by default: on with an NVIDIA card of 12 GB or more)
+    [string]$CloneUrl,          # use one on another machine instead, e.g. http://192.168.1.30:8100
     [int]$Port = 8080,
     [string]$Distro = "Ubuntu",
     [switch]$OpenPort
@@ -93,19 +95,16 @@ if ($Server -and $Server -ne "none") {
     $settings += "PUBLISH_URL=$Server", "PUBLISH_AUTO=true", "SHARE_TOKEN=$token"
     if ($ip) { $settings += "PUBLIC_URL=http://${ip}:$Port" }
 }
-if (-not $PSBoundParameters.ContainsKey("VoiceCreator")) {
-    $VoiceCreator = (Read-Host "Train your own voices on this PC too? It needs an NVIDIA GPU (y/N)") -match '^[yY]'
-}
-$settings += "VOICELAB=$(if ($VoiceCreator) { 'true' } else { 'false' })"
+# Everything is on by default; wsl-deploy.sh leaves out what the GPU can't take.
+$settings += "VOICELAB=$(if ($NoVoiceCreator) { 'false' } else { 'true' })"
 if ($CloneUrl) {
     $settings += "CLONE_URL=$($CloneUrl.TrimEnd('/'))", "CLONE_LOCAL=false"
+} elseif ($NoCloneServer) {
+    $settings += "CLONE_LOCAL=false"
+} elseif ($CloneServer) {
+    $settings += "CLONE_LOCAL=true", "CLONE_URL=http://clone:8100"  # the clone service beside Forge
 } else {
-    if (-not $PSBoundParameters.ContainsKey("CloneServer")) {
-        $CloneServer = (Read-Host ("Run the clone server here too, for cloned voices and Watch and read's pictures? " +
-            "It needs an NVIDIA GPU with 12 GB or more (y/N)")) -match '^[yY]'
-    }
-    $settings += "CLONE_LOCAL=$(if ($CloneServer) { 'true' } else { 'false' })"
-    if ($CloneServer) { $settings += "CLONE_URL=http://clone:8100" }  # the clone service beside Forge
+    $settings += "CLONE_LOCAL=auto"  # on with an NVIDIA card of 12 GB or more
 }
 
 # 4. Forge itself, in WSL

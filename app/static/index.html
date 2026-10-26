@@ -263,6 +263,25 @@
         another the pictures, or one can stand in when another is off.</p>
       <ol id="g-list" class="w-list g-list"></ol>
       <p class="hint" id="g-where"></p>
+      <details class="g-howto" id="g-howto">
+        <summary>How to set up a GPU server</summary>
+        <p>Any PC with a graphics card of 8 GB or more can be one: 12 GB or more for both jobs at their best. Run one
+          line on it. It downloads what it needs, starts the server, and ends by showing the <b>address</b> and
+          <b>token</b>: paste them into <b>Add a GPU server</b> below. Running it again updates the server and keeps its token.</p>
+        <h4>Windows, natively (NVIDIA or AMD Radeon)</h4>
+        <p>No WSL or Docker; it starts by itself when Windows does. In PowerShell as administrator:</p>
+        <div class="g-cmd"><pre><code data-cmd>irm https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.ps1 | iex</code></pre><button type="button" class="quiet small" data-copy>Copy</button></div>
+        <h4>Windows with WSL and Docker (NVIDIA)</h4>
+        <p>The same in WSL 2. It installs WSL if it's missing, and opens the port to other machines. In PowerShell as administrator:</p>
+        <div class="g-cmd"><pre><code data-cmd>&amp; ([scriptblock]::Create((irm https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.ps1))) -Mode wsl</code></pre><button type="button" class="quiet small" data-copy>Copy</button></div>
+        <h4>Linux with Docker (NVIDIA)</h4>
+        <p>It installs Docker and NVIDIA's container toolkit if they're missing:</p>
+        <div class="g-cmd"><pre><code data-cmd>curl -fsSL https://raw.githubusercontent.com/kmmarin/AudioBookForge/main/deploy/gpu-server.sh | sudo bash</code></pre><button type="button" class="quiet small" data-copy>Copy</button></div>
+        <h4>On this machine, beside Forge</h4>
+        <p>With an NVIDIA card of 12 GB or more, Forge's installer runs it here by itself (<code>CLONE_LOCAL=auto</code>),
+          and it's listed above.</p>
+        <p class="hint">The first voice or picture it makes downloads that model, about 7 GB each.</p>
+      </details>
       <form id="g-form" class="g-form">
         <h3 class="s-sub" id="g-form-title">Add a GPU server</h3>
         <div class="g-fields">
@@ -276,8 +295,7 @@
         </div>
         <div class="g-actions">
           <p class="hint g-result" id="g-result" role="status"></p>
-          <button type="button" class="quiet" id="g-test">Test it</button>
-          <button type="button" class="quiet" id="g-cancel" hidden>Cancel</button>
+          <button type="button" class="quiet" id="g-test">Test</button>
           <button type="submit" class="primary" id="g-save">Add</button>
         </div>
       </form>

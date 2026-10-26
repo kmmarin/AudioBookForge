@@ -7,7 +7,7 @@ x-forge: &forge
     context: .
     args:
       TORCH_VARIANT: ${TORCH_VARIANT:-cpu}
-      INSTALL_CALIBRE: ${INSTALL_CALIBRE:-false}
+      INSTALL_CALIBRE: ${INSTALL_CALIBRE:-true}
   image: ${IMAGE:-audiobook-forge:latest}
   restart: unless-stopped
   init: true
@@ -27,7 +27,7 @@ x-forge: &forge
     UNIT_CHARS: ${UNIT_CHARS:-1800}
     DEFAULT_FORMAT: ${DEFAULT_FORMAT:-m4b}
     BITRATE: ${BITRATE:-64k}
-    NORMALIZE: ${NORMALIZE:-false}
+    NORMALIZE: ${NORMALIZE:-true}
     OUTPUT_LAYOUT: ${OUTPUT_LAYOUT:-abs}
     QA_DEFAULT: ${QA_DEFAULT:-true}
     QA_SAMPLE: ${QA_SAMPLE:-0.25}

@@ -432,6 +432,22 @@ input[type="range"] { accent-color: var(--signal); width: 100%; }
 .g-jobs { display: flex; gap: 18px; margin: 10px 0; font-size: 14px; }
 .g-actions { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
 .g-result { flex: 1; margin: 0; }
+.g-howto { margin: 4px 0 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-s); }
+.g-howto summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.g-howto p { margin: 8px 0; font-size: 14px; max-width: 76ch; }
+.g-howto h4 { margin: 14px 0 2px; font-size: 14px; }
+.g-howto code { font-size: 13px; overflow-wrap: anywhere; }
+.g-token-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.g-cmd { display: flex; gap: 8px; align-items: flex-start; }
+.g-cmd pre {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: var(--track);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .g-result.bad { color: var(--fault); }
 @media (max-width: 640px) {
   .g-fields { grid-template-columns: 1fr; }

@@ -13,15 +13,10 @@ it. It's a service of its own (`voicelab`), reached through Forge at
 
 ## Turning it on
 
-On the PC with the NVIDIA GPU, in `.env`:
-
-```
-VOICELAB=true
-CLONE_URL=http://<clone server>:8100     # for cloned voices
-```
-
-then `wsl -u root -- bash deploy/wsl-deploy.sh`, or answer yes in
-`deploy/windows-converter.ps1`. By hand:
+It's on by default wherever there's an NVIDIA GPU: `deploy/windows-converter.ps1`,
+`deploy/wsl-deploy.sh` and `install.sh` add it there (`VOICELAB=false` in `.env`
+leaves it out). Cloned voices also need a GPU server: Forge's **Settings → GPU
+servers** shows how to set one up. By hand:
 `docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.voice.yml up -d --build`.
 Forge's header then shows **Create a voice**.
 
